@@ -80,9 +80,10 @@ fn execute(cli: Cli) -> Result<i32> {
             } => {
                 let summary = check_catalog(&repo_root, &contract_root, &scenario_root)?;
                 println!(
-                    "catalog ok: {} contracts, {} scenarios ({})",
+                    "catalog ok: {} contracts, {} scenarios, {} mapped legacy tests ({})",
                     summary.contracts,
                     summary.scenarios,
+                    summary.legacy_tests,
                     summary.contract_ids.join(", ")
                 );
                 Ok(0)

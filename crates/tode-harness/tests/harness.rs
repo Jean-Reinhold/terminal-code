@@ -27,8 +27,12 @@ fn repository_catalog_and_schema_are_current() {
         &root.join("harness/scenarios"),
     )
     .unwrap();
-    assert_eq!(summary.contract_ids, ["C01", "C02"]);
+    assert_eq!(
+        summary.contract_ids,
+        (1..=22).map(|id| format!("C{id:02}")).collect::<Vec<_>>()
+    );
     assert_eq!(summary.scenarios, 6);
+    assert_eq!(summary.legacy_tests, 119);
 
     let generated: Value = serde_json::from_str(&scenario_schema_json().unwrap()).unwrap();
     let committed: Value = serde_json::from_slice(

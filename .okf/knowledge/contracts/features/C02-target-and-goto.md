@@ -19,6 +19,8 @@ scenario_ids:
   - cli.target-folder
   - cli.target-missing
   - cli.goto
+legacy_test_paths:
+  - test/target.test.js
 platforms: [macos, linux]
 sources:
   - { id: target, resource: ../../../../src/target.ts, title: Target resolution }

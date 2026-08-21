@@ -19,7 +19,10 @@ pub struct ContractMetadata {
     pub owners: Vec<String>,
     pub surfaces: Vec<String>,
     pub source_paths: Vec<String>,
+    #[serde(default)]
     pub scenario_ids: Vec<String>,
+    #[serde(default)]
+    pub legacy_test_paths: Vec<String>,
     pub platforms: Vec<String>,
 }
 
@@ -33,6 +36,7 @@ pub struct Contract {
 pub struct CatalogSummary {
     pub contracts: usize,
     pub scenarios: usize,
+    pub legacy_tests: usize,
     pub contract_ids: Vec<String>,
     pub scenario_ids: Vec<String>,
 }
@@ -44,10 +48,11 @@ pub fn check_catalog(
 ) -> Result<CatalogSummary> {
     let contracts = discover_contracts(contract_root)?;
     let scenarios = discover_scenarios(scenario_root)?;
-    validate_catalog(repo_root, &contracts, &scenarios)?;
+    let legacy_tests = validate_catalog(repo_root, &contracts, &scenarios)?;
     Ok(CatalogSummary {
         contracts: contracts.len(),
         scenarios: scenarios.len(),
+        legacy_tests,
         contract_ids: contracts.keys().cloned().collect(),
         scenario_ids: scenarios.keys().cloned().collect(),
     })
@@ -107,7 +112,7 @@ fn validate_catalog(
     repo_root: &Path,
     contracts: &BTreeMap<String, Contract>,
     scenarios: &BTreeMap<String, (PathBuf, Scenario)>,
-) -> Result<()> {
+) -> Result<usize> {
     let repo_root = repo_root.canonicalize().map_err(|error| {
         HarnessError::io(format!("canonicalize {}", repo_root.display()), error)
     })?;
@@ -172,7 +177,7 @@ fn validate_catalog(
             }
         }
     }
-    Ok(())
+    count_mapped_legacy_tests(&repo_root, contracts)
 }
 
 fn validate_contract_metadata(metadata: &ContractMetadata, path: &Path) -> Result<()> {
@@ -206,24 +211,112 @@ fn validate_contract_metadata(metadata: &ContractMetadata, path: &Path) -> Resul
         ("owners", &metadata.owners),
         ("surfaces", &metadata.surfaces),
         ("source_paths", &metadata.source_paths),
-        ("scenario_ids", &metadata.scenario_ids),
         ("platforms", &metadata.platforms),
     ] {
-        if values.is_empty() || values.iter().any(|value| value.trim().is_empty()) {
+        validate_nonempty_unique(values, name, path, true)?;
+    }
+    validate_nonempty_unique(&metadata.scenario_ids, "scenario_ids", path, false)?;
+    validate_nonempty_unique(
+        &metadata.legacy_test_paths,
+        "legacy_test_paths",
+        path,
+        false,
+    )?;
+    if metadata.status == "stable" && metadata.scenario_ids.is_empty() {
+        return Err(HarnessError::Invalid(format!(
+            "{}: stable contract requires at least one scenario",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
+fn validate_nonempty_unique(
+    values: &[String],
+    name: &str,
+    path: &Path,
+    required: bool,
+) -> Result<()> {
+    if (required && values.is_empty()) || values.iter().any(|value| value.trim().is_empty()) {
+        return Err(HarnessError::Invalid(format!(
+            "{}: {name} must contain non-empty values",
+            path.display()
+        )));
+    }
+    let unique: BTreeSet<_> = values.iter().collect();
+    if unique.len() != values.len() {
+        return Err(HarnessError::Invalid(format!(
+            "{}: {name} contains duplicates",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
+fn count_mapped_legacy_tests(
+    repo_root: &Path,
+    contracts: &BTreeMap<String, Contract>,
+) -> Result<usize> {
+    let mapped: BTreeSet<_> = contracts
+        .values()
+        .flat_map(|contract| contract.metadata.legacy_test_paths.iter().cloned())
+        .collect();
+    for relative in &mapped {
+        if !repo_root.join(relative).is_file() {
             return Err(HarnessError::Invalid(format!(
-                "{}: {name} must contain non-empty values",
-                path.display()
-            )));
-        }
-        let unique: BTreeSet<_> = values.iter().collect();
-        if unique.len() != values.len() {
-            return Err(HarnessError::Invalid(format!(
-                "{}: {name} contains duplicates",
-                path.display()
+                "mapped legacy test path does not exist: {relative}"
             )));
         }
     }
-    Ok(())
+
+    let mut count = 0;
+    for entry in walkdir::WalkDir::new(repo_root.join("test")).follow_links(false) {
+        let entry = entry.map_err(|error| HarnessError::Invalid(error.to_string()))?;
+        if !entry.file_type().is_file()
+            || !entry.file_name().to_string_lossy().ends_with(".test.js")
+        {
+            continue;
+        }
+        let relative = entry
+            .path()
+            .strip_prefix(repo_root)
+            .map_err(|error| HarnessError::Invalid(error.to_string()))?
+            .to_string_lossy()
+            .into_owned();
+        let text = fs::read_to_string(entry.path()).map_err(|error| {
+            HarnessError::io(
+                format!("read legacy test {}", entry.path().display()),
+                error,
+            )
+        })?;
+        let declarations = count_test_declarations(&text);
+        if declarations > 0 && !mapped.contains(&relative) {
+            return Err(HarnessError::Invalid(format!(
+                "legacy test file has {declarations} unmapped declarations: {relative}"
+            )));
+        }
+        count += declarations;
+    }
+    Ok(count)
+}
+
+fn count_test_declarations(text: &str) -> usize {
+    let bytes = text.as_bytes();
+    text.match_indices("test")
+        .filter(|(start, _)| {
+            if *start > 0 {
+                let previous = bytes[*start - 1];
+                if previous.is_ascii_alphanumeric() || previous == b'_' {
+                    return false;
+                }
+            }
+            let mut next = *start + 4;
+            while next < bytes.len() && bytes[next].is_ascii_whitespace() {
+                next += 1;
+            }
+            bytes.get(next) == Some(&b'(')
+        })
+        .count()
 }
 
 fn extract_frontmatter<'a>(text: &'a str, path: &Path) -> Result<&'a str> {
