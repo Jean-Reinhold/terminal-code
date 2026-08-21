@@ -1,0 +1,7 @@
+{
+  "exit_code": 2,
+  "signal": null,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "tode-contract-probe: the tode window did not answer\n"
+}

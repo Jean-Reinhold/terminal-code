@@ -14,6 +14,7 @@ pub struct SocketTranscript {
     pub request: serde_json::Value,
     pub response: serde_json::Value,
     pub request_bytes: u64,
+    pub response_written: bool,
 }
 
 #[derive(Debug)]
@@ -28,6 +29,7 @@ impl SocketPeer {
         name: &str,
         reply: serde_json::Value,
         max_request_bytes: u64,
+        response_delay: Duration,
         timeout: Duration,
     ) -> Result<Self> {
         let lease = broker.lease_socket(name)?;
@@ -60,7 +62,7 @@ impl SocketPeer {
             connection
                 .set_write_timeout(Some(remaining))
                 .map_err(|error| HarnessError::io("set Unix socket write timeout", error))?;
-            read_and_reply(&mut connection, reply, max_request_bytes)
+            read_and_reply(&mut connection, reply, max_request_bytes, response_delay)
         });
         Ok(Self { lease, worker })
     }
@@ -80,6 +82,7 @@ fn read_and_reply(
     connection: &mut UnixStream,
     response: serde_json::Value,
     max_request_bytes: u64,
+    response_delay: Duration,
 ) -> Result<SocketTranscript> {
     let reader_stream = connection
         .try_clone()
@@ -106,16 +109,27 @@ fn read_and_reply(
     let mut response_bytes =
         serde_json::to_vec(&response).map_err(|error| HarnessError::Json(error.to_string()))?;
     response_bytes.push(b'\n');
-    connection
+    thread::sleep(response_delay);
+    let response_written = match connection
         .write_all(&response_bytes)
-        .map_err(|error| HarnessError::io("write Unix socket JSON reply", error))?;
-    connection
-        .flush()
-        .map_err(|error| HarnessError::io("flush Unix socket JSON reply", error))?;
+        .and_then(|()| connection.flush())
+    {
+        Ok(()) => true,
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::ConnectionReset
+            ) =>
+        {
+            false
+        }
+        Err(error) => return Err(HarnessError::io("write Unix socket JSON reply", error)),
+    };
     Ok(SocketTranscript {
         request: parsed,
         response,
         request_bytes: request.len() as u64,
+        response_written,
     })
 }
 
@@ -136,6 +150,7 @@ mod tests {
             "oversized",
             json!({"ok": true}),
             4,
+            Duration::ZERO,
             Duration::from_secs(1),
         )
         .unwrap();
@@ -153,6 +168,7 @@ mod tests {
             "timeout",
             json!({"ok": true}),
             1024,
+            Duration::ZERO,
             Duration::from_millis(20),
         )
         .unwrap();

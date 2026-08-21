@@ -386,6 +386,7 @@ pub fn run(config: &RunConfig) -> Result<RunOutcome> {
                     id,
                     environment: environment_name,
                     reply,
+                    delay_ms,
                     max_request_bytes,
                     timeout_ms,
                 } => {
@@ -394,6 +395,7 @@ pub fn run(config: &RunConfig) -> Result<RunOutcome> {
                         id,
                         reply.clone(),
                         *max_request_bytes,
+                        Duration::from_millis(*delay_ms),
                         Duration::from_millis(*timeout_ms),
                     )?;
                     if environment

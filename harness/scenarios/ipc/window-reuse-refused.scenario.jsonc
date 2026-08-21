@@ -1,8 +1,8 @@
 {
   "$schema": "../../schemas/scenario-v1.schema.json",
   "schema_version": 1,
-  "id": "ipc.window-reuse.success",
-  "title": "Existing window accepts a JSON-line open request",
+  "id": "ipc.window-reuse.refused",
+  "title": "Existing window preserves refusal error",
   "contracts": ["C05"],
   "risk": "critical",
   "targets": { "mode": "single", "target": "rust-core" },
@@ -17,7 +17,7 @@
       "id": "window",
       "kind": "unix_socket.server",
       "environment": "TODE_IPC",
-      "reply": { "ok": true },
+      "reply": { "ok": false, "error": "nope" },
       "max_request_bytes": 4096,
       "timeout_ms": 2000
     },
@@ -39,12 +39,12 @@
     {
       "kind": "exact.snapshot",
       "observation": "result",
-      "snapshot": "harness/baselines/ipc/window-reuse-success.process.json"
+      "snapshot": "harness/baselines/ipc/window-reuse-refused.process.json"
     },
     {
       "kind": "exact.json",
       "observation": "wire",
-      "snapshot": "harness/baselines/ipc/window-reuse-success.transcript.json"
+      "snapshot": "harness/baselines/ipc/window-reuse-refused.transcript.json"
     }
   ]
 }

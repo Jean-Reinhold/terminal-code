@@ -5,7 +5,8 @@
     "add": false
   },
   "response": {
-    "ok": true
+    "ok": false,
+    "error": "nope"
   },
   "request_bytes": 38,
   "response_written": true

@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Target {
@@ -9,7 +9,7 @@ pub struct Target {
     pub file: Option<PathBuf>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OpenFile {
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]

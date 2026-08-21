@@ -110,6 +110,8 @@ pub enum Step {
         id: String,
         environment: String,
         reply: serde_json::Value,
+        #[serde(default)]
+        delay_ms: u64,
         max_request_bytes: u64,
         timeout_ms: u64,
     },
@@ -370,6 +372,7 @@ fn validate_scenario(scenario: &Scenario, path: &Path) -> Result<()> {
             }
             Step::UnixSocketServer {
                 environment,
+                delay_ms,
                 max_request_bytes,
                 timeout_ms,
                 ..
@@ -391,6 +394,9 @@ fn validate_scenario(scenario: &Scenario, path: &Path) -> Result<()> {
                         path,
                         "socket timeout must be positive and within run timeout",
                     );
+                }
+                if *delay_ms > *timeout_ms {
+                    return invalid(path, "socket delay_ms must not exceed socket timeout");
                 }
             }
         }

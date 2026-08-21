@@ -5,7 +5,7 @@ use std::process::ExitCode;
 use std::thread;
 use std::time::Duration;
 
-use tode_core::{parse_goto, resolve_target};
+use tode_core::{OpenRequest, parse_goto, resolve_target, send_to_extension};
 
 fn main() -> ExitCode {
     match execute() {
@@ -77,9 +77,28 @@ fn execute() -> Result<(), String> {
                 .map_err(|error| format!("read response: {error}"))?;
             print!("{response}");
         }
+        "ipc-open" => ipc_open(&mode, &arguments, Some(Duration::from_secs(4)))?,
+        "ipc-open-wait" => ipc_open(&mode, &arguments, None)?,
+        "ipc-open-timeout" => {
+            if arguments.len() != 2 {
+                return Err("ipc-open-timeout takes a request and milliseconds".into());
+            }
+            let timeout = arguments[1]
+                .parse::<u64>()
+                .map_err(|error| format!("parse timeout milliseconds: {error}"))?;
+            ipc_open(&mode, &arguments[..1], Some(Duration::from_millis(timeout)))?;
+        }
         _ => return Err(format!("unknown mode {mode}")),
     }
     Ok(())
+}
+
+fn ipc_open(mode: &str, arguments: &[String], timeout: Option<Duration>) -> Result<(), String> {
+    let request: OpenRequest = serde_json::from_str(one_argument(mode, arguments)?)
+        .map_err(|error| format!("parse request JSON: {error}"))?;
+    let socket = env::var("TODE_IPC").map_err(|_| "TODE_IPC is not set".to_owned())?;
+    send_to_extension(std::path::Path::new(&socket), &request, timeout)
+        .map_err(|error| error.to_string())
 }
 
 fn one_argument<'a>(mode: &str, arguments: &'a [String]) -> Result<&'a str, String> {

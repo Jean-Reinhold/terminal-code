@@ -1,8 +1,8 @@
 {
   "$schema": "../../schemas/scenario-v1.schema.json",
   "schema_version": 1,
-  "id": "ipc.window-reuse.success",
-  "title": "Existing window accepts a JSON-line open request",
+  "id": "ipc.window-reuse.wait",
+  "title": "Wait mode accepts delayed window reply",
   "contracts": ["C05"],
   "risk": "critical",
   "targets": { "mode": "single", "target": "rust-core" },
@@ -18,17 +18,18 @@
       "kind": "unix_socket.server",
       "environment": "TODE_IPC",
       "reply": { "ok": true },
+      "delay_ms": 100,
       "max_request_bytes": 4096,
-      "timeout_ms": 2000
+      "timeout_ms": 1000
     },
     {
       "id": "client",
       "kind": "process.exec",
       "program": { "target": "target-probe" },
-      "args": ["ipc-open", "{\"files\":[],\"folders\":[],\"add\":false}"],
+      "args": ["ipc-open-wait", "{\"files\":[],\"folders\":[],\"add\":false,\"wait\":true}"],
       "stdin": "closed",
       "capture": ["stdout", "stderr", "exit"],
-      "timeout_ms": 3000
+      "timeout_ms": 1000
     }
   ],
   "observations": [
@@ -39,12 +40,7 @@
     {
       "kind": "exact.snapshot",
       "observation": "result",
-      "snapshot": "harness/baselines/ipc/window-reuse-success.process.json"
-    },
-    {
-      "kind": "exact.json",
-      "observation": "wire",
-      "snapshot": "harness/baselines/ipc/window-reuse-success.transcript.json"
+      "snapshot": "harness/baselines/ipc/window-reuse-wait.process.json"
     }
   ]
 }

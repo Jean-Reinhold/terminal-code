@@ -19,7 +19,7 @@ sources:
 # Implemented
 
 * Root Cargo workspace pinned to Rust 1.98.0.
-* `tode-core` Rust library with target resolution and goto parsing.
+* `tode-core` Rust library with target/goto parsing and newline-framed Unix IPC client behavior.
 * `tode-harness` binary/library with `catalog check`, `schema`, `run`, and `replay` commands.
 * YAML-backed OKF catalog with 22 contract concepts, draft-aware executable coverage, reciprocal scenario links, risk/owner/surface/platform/source validation, and all 119 legacy test declarations mapped.
 * Strict JSONC scenario v1 compiler and generated JSON Schema.
@@ -32,18 +32,22 @@ sources:
 * Held loopback port and short Unix-socket lease broker, 1 MiB process-output budget, and process-group cleanup invariant.
 * Bounded Unix JSON-line peer scenario adapter with typed environment injection, transcript artifacts, exact JSON assertions, timeout, and oversized-request rejection.
 * C01-C22 individual OKF compatibility concepts.
-* Seven characterization scenarios: two legacy C01 CLI scenarios, four Rust C02 target/goto scenarios, and one Rust C05 IPC scenario.
+* Ten characterization scenarios: two legacy C01 CLI scenarios, four Rust C02 target/goto scenarios, and four Rust C05 IPC scenarios.
 * Rust `tode-contract-probe` binary that serializes `tode-core` results without duplicating product logic.
 
 # Verified Behavior
 
-* `tode-harness catalog check`: 22 contracts, 7 reciprocal scenarios, and 119 mapped legacy test declarations.
+* `tode-harness catalog check`: 22 contracts, 10 reciprocal scenarios, and 119 mapped legacy test declarations.
 * C01 help/version scenarios passed against the real legacy CLI in fresh sandboxes.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* Sixteen Rust workspace tests passed:
+* Twenty Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
+  - IPC JSON-line framing and omitted optional fields;
+  - IPC explicit refusal and unreadable reply errors;
+  - IPC read timeout mapping;
+  - IPC missing socket error;
   - committed catalog/schema agreement;
   - forbidden shell-kind and absolute fixture rejection;
   - protected HOME override and fixture-symlink rejection;
@@ -70,7 +74,7 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Not Implemented Yet
 
-* Executable scenarios for C03-C22; their concepts and legacy test mappings are complete.
+* Executable scenarios for C03-C04 and C06-C22; their concepts and legacy test mappings are complete.
 * A Rust product CLI target for C01 and direct dual-target differential execution; C02 currently uses reviewed legacy-derived exact snapshots.
 * HTTP/WebSocket, PTY/OSC, browser, terminal hardware, release/R2, and install scenario adapters.
 * Hard S2/S3 isolation, total resource budgets, fault injection, and crash resumption.
@@ -79,4 +83,4 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Next Slice
 
-Complete H3 by converting the mapped legacy corpus into Rust/Bash executable scenarios, starting with C05 refusal/unreadable/timeout/wait and C08 injector HTTP/WebSocket cases. Add a Rust product CLI target for C01 so help/version can leave the Node oracle.
+Continue H3 with C08 injector HTTP/WebSocket cases in Rust, then port the C09-C11 palette/theme/JSONC corpus. Add a Rust product CLI target for C01 so help/version can leave the Node oracle.
