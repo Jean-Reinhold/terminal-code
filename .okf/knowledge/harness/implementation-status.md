@@ -21,7 +21,7 @@ sources:
 * Root Cargo workspace pinned to Rust 1.98.0.
 * `tode-core` Rust library with CLI identity, target/goto, Unix IPC, OSC palettes, source-preserving JSONC, complete themes, shortcut transforms/decisions, and release target/manifest/receipt schemas.
 * `tode-profile` Rust crate with XDG/install ownership, managed/seeded settings, atomic writes, managed theme extension/registry/live files, and full non-UI editor import.
-* `tode-runtime` Rust HTTP/1 injector with CSS/font handling, header rewriting, readiness hold, controlled errors, and upgraded-stream bridging.
+* `tode-runtime` Rust HTTP injector plus streamed verified downloads, bounded safe tar.gz extraction, and rollback-safe directory swaps.
 * `tode-harness` binary/library with `catalog check`, `schema`, `run`, and `replay` commands.
 * YAML-backed OKF catalog with 22 contract concepts, draft-aware executable coverage, reciprocal scenario links, risk/owner/surface/platform/source validation, and all 119 legacy test declarations mapped.
 * Strict JSONC scenario v1 compiler and generated JSON Schema.
@@ -40,11 +40,11 @@ sources:
 
 # Verified Behavior
 
-* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 64 contract-mapped Rust tests.
+* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 69 contract-mapped Rust tests.
 * C01 Rust help/version scenarios matched exact snapshots captured from the legacy CLI.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* Seventy-eight Rust workspace tests passed:
+* Eighty-three Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
   - CLI help completeness and version receipt/fallback;
@@ -76,7 +76,8 @@ sources:
   - five profile path/precedence/idempotence/atomic-install tests;
   - six import discovery/progress/settings/keybindings/snippets/tasks/extensions safety/report tests;
   - two managed theme extension/registry/live-file cleanup/idempotence tests;
-  - five release target/manifest/build-selection/receipt tests.
+  - five release target/manifest/build-selection/receipt tests;
+  - five verified download/extraction/link-limit/atomic-swap tests.
 * `cargo fmt --all` and strict Clippy with `-D warnings` passed.
 
 # Current Trust Boundary
@@ -100,4 +101,4 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Next Slice
 
-Continue M4/M7 with verified download, safe archive extraction, runtime resolution, and atomic upgrade transactions. Full C14 convergence and production command wiring remain explicitly open.
+Continue M4 with terminal-browser/code-server resolver, managed process state/readiness/warm-up/shutdown, then wire the verified artifact and injector modules together. Full C14 convergence remains explicitly open.
