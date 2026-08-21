@@ -20,8 +20,8 @@ sources:
 
 # Contract
 
-Preserve page copy/structure, responsive rail/content layout, fonts/colors/rules/assets, video controls, usage/install interactions, header/footer/GitHub links, metadata/opengraph/analytics, accessibility/focus behavior, and `/install` proxy semantics that keep large downloads off site bandwidth.
+Preserve page copy/structure, responsive rail/content layout, fonts/colors/rules/assets, usage/install interactions, header/footer/GitHub links, metadata/opengraph/analytics, accessibility/focus behavior, and `/install` proxy semantics that keep large downloads off site bandwidth. Do not publish stale or non-certified demo media.
 
 # Coverage Status
 
-No current browser suite exists. H5 requires Rust-driven real-browser DOM/accessibility/network/visual scenarios before replacing Next.js.
+The stale dual-theme demo, posters, and custom player were removed. The verified homepage now renders hero→usage→architecture with no video elements or failed requests. H5 still requires Rust-driven browser/accessibility/visual scenarios; the [replacement video plan](../../plans/replacement-demo-video.md) is blocked on M8/H7.

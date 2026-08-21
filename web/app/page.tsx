@@ -1,7 +1,6 @@
 import Install from "./components/install";
 import SiteHeader from "./components/site-header";
 import Usage from "./components/usage";
-import VideoPlayer from "./components/video-player";
 import { GithubMark } from "./components/icons";
 
 export default function Home() {
@@ -31,25 +30,6 @@ export default function Home() {
 
         <div className="rule" aria-hidden />
 
-        {/* the demo sits in the same column as the text, indent and all */}
-        <div className="grid grid-cols-1 gap-8 py-12 sm:grid-cols-[64px_1fr] sm:py-14">
-          <div className="hidden sm:block" aria-hidden />
-          <VideoPlayer
-            dark={{
-              src: "/demo-dark.mp4",
-              poster: "/demo-dark-poster.webp",
-              durationHint: 7.07,
-            }}
-            light={{
-              src: "/demo-light.mp4",
-              poster: "/demo-light-poster.webp",
-              durationHint: 8.23,
-            }}
-            ratio="1600 / 1076"
-          />
-        </div>
-
-        <div className="rule" aria-hidden />
 
         <div className="grid grid-cols-1 gap-6 pt-12 sm:grid-cols-[64px_1fr] sm:gap-8 sm:pt-14">
           <div className="hidden sm:block" aria-hidden />
