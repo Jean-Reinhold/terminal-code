@@ -23,3 +23,4 @@
 * **M3 C11 profile ownership**: Added `tode-profile` with exact XDG/install paths, managed/seeded settings precedence, atomic mode-preserving writes, and idempotent installation tests.
 * **M3 C12 import**: Ported settings, keybindings, snippets, tasks, extension registry/copy, reports, deduplication, and unsafe/symlink rejection to Rust.
 * **M3 C12 service completion**: Added Rust editor discovery, XDG precedence, content summaries, and extension-copy progress; the non-UI import service now has 6 integration tests.
+* **M3 theme installation**: Added Rust managed theme extension manifests, registry replacement, old fingerprint cleanup, live-theme output, and idempotent installation.

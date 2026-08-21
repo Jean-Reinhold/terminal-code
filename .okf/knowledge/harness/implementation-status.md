@@ -20,7 +20,7 @@ sources:
 
 * Root Cargo workspace pinned to Rust 1.98.0.
 * `tode-core` Rust library with CLI identity, target/goto, Unix IPC, OSC palettes, source-preserving JSONC, complete themes, shortcut transforms, and persisted decision-derived bindings.
-* `tode-profile` Rust crate with XDG/install ownership, managed/seeded settings, atomic writes, and settings/keybindings/snippets/tasks/extensions import reports.
+* `tode-profile` Rust crate with XDG/install ownership, managed/seeded settings, atomic writes, managed theme extension/registry/live files, and full non-UI editor import.
 * `tode-runtime` Rust HTTP/1 injector with CSS/font handling, header rewriting, readiness hold, controlled errors, and upgraded-stream bridging.
 * `tode-harness` binary/library with `catalog check`, `schema`, `run`, and `replay` commands.
 * YAML-backed OKF catalog with 22 contract concepts, draft-aware executable coverage, reciprocal scenario links, risk/owner/surface/platform/source validation, and all 119 legacy test declarations mapped.
@@ -40,11 +40,11 @@ sources:
 
 # Verified Behavior
 
-* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 57 contract-mapped Rust tests.
+* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 59 contract-mapped Rust tests.
 * C01 Rust help/version scenarios matched exact snapshots captured from the legacy CLI.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* Seventy-one Rust workspace tests passed:
+* Seventy-three Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
   - CLI help completeness and version receipt/fallback;
@@ -74,7 +74,8 @@ sources:
   - eight chord/Ghostty/Kitty conversion, config, include, emit, and shared-rebind tests;
   - four persisted shortcut claim/import/quit/fallback binding tests;
   - five profile path/precedence/idempotence/atomic-install tests;
-  - six import discovery/progress/settings/keybindings/snippets/tasks/extensions safety/report tests.
+  - six import discovery/progress/settings/keybindings/snippets/tasks/extensions safety/report tests;
+  - two managed theme extension/registry/live-file cleanup/idempotence tests.
 * `cargo fmt --all` and strict Clippy with `-D warnings` passed.
 
 # Current Trust Boundary
@@ -98,4 +99,4 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Next Slice
 
-Continue M3 with managed theme/font/bridge extension installation and production import command wiring. The full C14 claimant graph/convergence loop remains explicitly open.
+Continue M3/M4 with bridge extension generation/activation and production command wiring. The full C14 claimant graph/convergence loop remains explicitly open.

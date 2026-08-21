@@ -13,10 +13,20 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
-use tode_core::{read_key, set_key};
+use tode_core::{
+    GeneratedTheme, TerminalPalette, generate_theme, palette_fingerprint, read_key, set_key,
+};
 
 pub const FONT_FAMILY: &str = "JetBrains Mono";
 pub const FONT_FALLBACKS: &str = "Menlo, \"DejaVu Sans Mono\", \"Liberation Mono\", monospace";
+pub const THEME_EXTENSION_ID: &str = "tode.tode-theme";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThemeInstall {
+    pub changed: bool,
+    pub fingerprint: String,
+    pub directory: PathBuf,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProfilePaths {
@@ -105,6 +115,107 @@ pub fn install_settings(paths: &ProfilePaths) -> std::io::Result<bool> {
     let file = paths.user.join("settings.json");
     let source = fs::read_to_string(&file).unwrap_or_else(|_| "{}".into());
     write_if_changed(&file, apply_settings(&source).as_bytes())
+}
+
+pub fn install_theme(
+    paths: &ProfilePaths,
+    palette: &TerminalPalette,
+) -> std::io::Result<ThemeInstall> {
+    let fingerprint = palette_fingerprint(palette);
+    install_theme_document(paths, &generate_theme(palette), &fingerprint)
+}
+
+pub fn install_theme_document(
+    paths: &ProfilePaths,
+    theme: &GeneratedTheme,
+    fingerprint: &str,
+) -> std::io::Result<ThemeInstall> {
+    let folder = format!("{THEME_EXTENSION_ID}-{fingerprint}");
+    let directory = paths.extensions.join(&folder);
+    let theme_file = directory.join("themes/tode-terminal.json");
+    let changed = !theme_file.is_file();
+    if changed {
+        fs::create_dir_all(theme_file.parent().expect("theme path has parent"))?;
+        let ui_theme = if theme.theme_type == "light" {
+            "vs"
+        } else {
+            "vs-dark"
+        };
+        let manifest = json!({
+            "name": "tode-theme",
+            "displayName": "terminal-code terminal theme",
+            "publisher": "tode",
+            "version": "1.0.0",
+            "engines": {"vscode": "^1.80.0"},
+            "categories": ["Themes"],
+            "contributes": {
+                "themes": [{
+                    "label": "Terminal Code",
+                    "uiTheme": ui_theme,
+                    "path": "./themes/tode-terminal.json"
+                }]
+            }
+        });
+        write_json(&directory.join("package.json"), &manifest)?;
+        write_json(&theme_file, theme)?;
+    }
+    register_theme_extension(paths, &directory)?;
+    if let Ok(entries) = fs::read_dir(&paths.extensions) {
+        let prefix = format!("{THEME_EXTENSION_ID}-");
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with(&prefix) && name != folder {
+                let _ = fs::remove_dir_all(entry.path());
+            }
+        }
+    }
+    let live = format!(
+        "{}\n",
+        serde_json::to_string(theme).expect("generated theme serializes")
+    );
+    write_if_changed(&paths.data.join("live-theme.json"), live.as_bytes())?;
+    Ok(ThemeInstall {
+        changed,
+        fingerprint: fingerprint.into(),
+        directory,
+    })
+}
+
+fn register_theme_extension(paths: &ProfilePaths, directory: &Path) -> std::io::Result<()> {
+    let registry = paths.extensions.join("extensions.json");
+    let Ok(source) = fs::read(&registry) else {
+        return Ok(());
+    };
+    let Ok(mut entries) = serde_json::from_slice::<Vec<Value>>(&source) else {
+        return Ok(());
+    };
+    entries.retain(|entry| {
+        entry.pointer("/identifier/id").and_then(Value::as_str) != Some(THEME_EXTENSION_ID)
+    });
+    let folder = directory
+        .file_name()
+        .expect("theme directory has a file name")
+        .to_string_lossy();
+    entries.push(json!({
+        "identifier": {"id": THEME_EXTENSION_ID},
+        "version": "1.0.0",
+        "relativeLocation": folder,
+        "location": {"$mid": 1, "path": directory, "scheme": "file"},
+        "metadata": {
+            "isApplicationScoped": false,
+            "isMachineScoped": false,
+            "installedTimestamp": 0
+        }
+    }));
+    write_json(&registry, &entries)
+}
+
+fn write_json(path: &Path, value: &impl serde::Serialize) -> std::io::Result<()> {
+    let output = format!(
+        "{}\n",
+        serde_json::to_string_pretty(value).expect("profile JSON serializes")
+    );
+    write_if_changed(path, output.as_bytes()).map(|_| ())
 }
 
 fn base(
@@ -236,5 +347,52 @@ mod tests {
             read_key(&settings, "workbench.colorTheme"),
             Some(json!("Terminal Code"))
         );
+    }
+
+    #[test]
+    fn installs_registers_and_cleans_theme_extensions() {
+        let root = TempDir::new().unwrap();
+        let paths = ProfilePaths::from_environment(root.path(), &BTreeMap::new());
+        fs::create_dir_all(&paths.extensions).unwrap();
+        fs::write(paths.extensions.join("extensions.json"), "[]").unwrap();
+        fs::create_dir(paths.extensions.join("tode.tode-theme-old")).unwrap();
+        let palette = tode_core::with_fallbacks(None);
+        let installed = install_theme(&paths, &palette).unwrap();
+        assert!(installed.changed);
+        assert!(installed.directory.join("package.json").is_file());
+        assert!(
+            installed
+                .directory
+                .join("themes/tode-terminal.json")
+                .is_file()
+        );
+        assert!(!paths.extensions.join("tode.tode-theme-old").exists());
+        let registry_source = fs::read_to_string(paths.extensions.join("extensions.json")).unwrap();
+        let registry: Value = serde_json::from_str(&registry_source)
+            .unwrap_or_else(|error| panic!("{error}: {registry_source:?}"));
+        assert_eq!(registry[0]["identifier"]["id"], THEME_EXTENSION_ID);
+        assert_eq!(
+            registry[0]["relativeLocation"].as_str(),
+            installed
+                .directory
+                .file_name()
+                .and_then(|name| name.to_str())
+        );
+        assert!(paths.data.join("live-theme.json").is_file());
+    }
+
+    #[test]
+    fn theme_install_is_idempotent_for_same_fingerprint() {
+        let root = TempDir::new().unwrap();
+        let paths = ProfilePaths::from_environment(root.path(), &BTreeMap::new());
+        fs::create_dir_all(&paths.extensions).unwrap();
+        fs::write(paths.extensions.join("extensions.json"), "[]").unwrap();
+        let palette = tode_core::with_fallbacks(None);
+        let first = install_theme(&paths, &palette).unwrap();
+        let second = install_theme(&paths, &palette).unwrap();
+        assert!(first.changed);
+        assert!(!second.changed);
+        assert_eq!(first.fingerprint, second.fingerprint);
+        assert_eq!(first.directory, second.directory);
     }
 }
