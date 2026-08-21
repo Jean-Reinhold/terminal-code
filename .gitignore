@@ -5,6 +5,8 @@ node_modules/
 dist/
 assets/pages/
 *.tsbuildinfo
+/target/
+/.harness-artifacts/
 
 # logs
 *.log

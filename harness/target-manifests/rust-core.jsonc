@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "id": "rust-core",
+  "programs": {
+    "target-probe": {
+      "executable": { "repo_path": "target/debug/tode-contract-probe" }
+    }
+  }
+}

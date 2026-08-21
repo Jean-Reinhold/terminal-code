@@ -1,0 +1,41 @@
+{
+  "$schema": "../../schemas/scenario-v1.schema.json",
+  "schema_version": 1,
+  "id": "cli.target-missing",
+  "title": "Missing path resolves as a new absolute file target",
+  "contracts": ["C02"],
+  "risk": "high",
+  "targets": { "mode": "single", "target": "rust-core" },
+  "requires": {
+    "os": ["macos", "linux"],
+    "capabilities": ["process", "filesystem"],
+    "timeout_ms": 5000
+  },
+  "sandbox": {
+    "fixture": "harness/fixtures/cli/targets",
+    "environment": {},
+    "network": "not-required"
+  },
+  "steps": [
+    {
+      "id": "probe",
+      "kind": "process.exec",
+      "program": { "target": "target-probe" },
+      "args": ["resolve-target", { "sandbox_path": "workspace/not-made-yet.txt" }],
+      "stdin": "closed",
+      "capture": ["stdout", "stderr", "exit"],
+      "timeout_ms": 3000
+    }
+  ],
+  "observations": [{ "id": "result", "kind": "process.result", "from": "probe" }],
+  "normalization": [
+    { "observation": "result", "normalizer": "path.sandbox-root-v1" }
+  ],
+  "assertions": [
+    {
+      "kind": "exact.snapshot",
+      "observation": "result",
+      "snapshot": "harness/baselines/cli/target-missing.process.json"
+    }
+  ]
+}

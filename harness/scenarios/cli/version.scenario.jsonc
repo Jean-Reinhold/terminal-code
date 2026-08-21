@@ -1,0 +1,38 @@
+{
+  "$schema": "../../schemas/scenario-v1.schema.json",
+  "schema_version": 1,
+  "id": "cli.version",
+  "title": "CLI version reads the installation receipt",
+  "contracts": ["C01"],
+  "risk": "medium",
+  "targets": { "mode": "single", "target": "legacy" },
+  "requires": {
+    "os": ["macos", "linux"],
+    "capabilities": ["process", "filesystem"],
+    "timeout_ms": 5000
+  },
+  "sandbox": {
+    "fixture": "harness/fixtures/cli/version",
+    "environment": {},
+    "network": "not-required"
+  },
+  "steps": [
+    {
+      "id": "invoke",
+      "kind": "process.exec",
+      "program": { "target": "tode" },
+      "args": ["--version"],
+      "stdin": "closed",
+      "capture": ["stdout", "stderr", "exit"],
+      "timeout_ms": 3000
+    }
+  ],
+  "observations": [{ "id": "result", "kind": "process.result", "from": "invoke" }],
+  "assertions": [
+    {
+      "kind": "exact.snapshot",
+      "observation": "result",
+      "snapshot": "harness/baselines/cli/version.process.json"
+    }
+  ]
+}

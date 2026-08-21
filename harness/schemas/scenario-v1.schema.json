@@ -1,0 +1,426 @@
+{
+  "$defs": {
+    "AssertionSpec": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "exact.snapshot",
+              "type": "string"
+            },
+            "observation": {
+              "type": "string"
+            },
+            "snapshot": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "observation",
+            "snapshot"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "differential.equal",
+              "type": "string"
+            },
+            "observation": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "observation"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "EnvironmentValue": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "properties": {
+            "sandbox_path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "sandbox_path"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "NetworkMode": {
+      "enum": [
+        "not-required"
+      ],
+      "type": "string"
+    },
+    "NormalizationSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "normalizer": {
+          "type": "string"
+        },
+        "observation": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "observation",
+        "normalizer"
+      ],
+      "type": "object"
+    },
+    "ObservationSpec": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "from": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "process.result",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "id",
+            "from"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ProcessCapture": {
+      "enum": [
+        "stdout",
+        "stderr",
+        "exit"
+      ],
+      "type": "string"
+    },
+    "ProgramRef": {
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "type": "object"
+    },
+    "Requirements": {
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "os": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "timeout_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "os",
+        "timeout_ms"
+      ],
+      "type": "object"
+    },
+    "RetryClass": {
+      "enum": [
+        "worker-lost",
+        "artifact-store-unavailable"
+      ],
+      "type": "string"
+    },
+    "RetrySpec": {
+      "additionalProperties": false,
+      "properties": {
+        "max_attempts": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "only": {
+          "items": {
+            "$ref": "#/$defs/RetryClass"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "max_attempts",
+        "only"
+      ],
+      "type": "object"
+    },
+    "Risk": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "type": "string"
+    },
+    "SandboxSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "environment": {
+          "additionalProperties": {
+            "$ref": "#/$defs/EnvironmentValue"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "fixture": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "network": {
+          "$ref": "#/$defs/NetworkMode"
+        }
+      },
+      "required": [
+        "network"
+      ],
+      "type": "object"
+    },
+    "ScenarioValue": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "properties": {
+            "sandbox_path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "sandbox_path"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "StdinMode": {
+      "enum": [
+        "closed"
+      ],
+      "type": "string"
+    },
+    "Step": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "args": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ScenarioValue"
+              },
+              "type": "array"
+            },
+            "capture": {
+              "items": {
+                "$ref": "#/$defs/ProcessCapture"
+              },
+              "type": "array"
+            },
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "process.exec",
+              "type": "string"
+            },
+            "program": {
+              "$ref": "#/$defs/ProgramRef"
+            },
+            "stdin": {
+              "$ref": "#/$defs/StdinMode"
+            },
+            "timeout_ms": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "id",
+            "program",
+            "stdin",
+            "capture",
+            "timeout_ms"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "TargetSelection": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "const": "single",
+              "type": "string"
+            },
+            "target": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "mode",
+            "target"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "left": {
+              "type": "string"
+            },
+            "mode": {
+              "const": "differential",
+              "type": "string"
+            },
+            "right": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "mode",
+            "left",
+            "right"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "assertions": {
+      "items": {
+        "$ref": "#/$defs/AssertionSpec"
+      },
+      "type": "array"
+    },
+    "contracts": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "id": {
+      "type": "string"
+    },
+    "normalization": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/NormalizationSpec"
+      },
+      "type": "array"
+    },
+    "observations": {
+      "items": {
+        "$ref": "#/$defs/ObservationSpec"
+      },
+      "type": "array"
+    },
+    "requires": {
+      "$ref": "#/$defs/Requirements"
+    },
+    "retry": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RetrySpec"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "risk": {
+      "$ref": "#/$defs/Risk"
+    },
+    "sandbox": {
+      "$ref": "#/$defs/SandboxSpec"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/Step"
+      },
+      "type": "array"
+    },
+    "targets": {
+      "$ref": "#/$defs/TargetSelection"
+    },
+    "title": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema_version",
+    "id",
+    "title",
+    "contracts",
+    "risk",
+    "targets",
+    "requires",
+    "sandbox",
+    "steps",
+    "observations",
+    "assertions"
+  ],
+  "title": "Scenario",
+  "type": "object"
+}

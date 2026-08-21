@@ -1,0 +1,7 @@
+{
+  "exit_code": 0,
+  "signal": null,
+  "timed_out": false,
+  "stdout": "{\"path\":\"src/main.ts\",\"line\":12,\"column\":4}\n",
+  "stderr": ""
+}

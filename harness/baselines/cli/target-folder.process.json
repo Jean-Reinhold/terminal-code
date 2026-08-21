@@ -1,0 +1,7 @@
+{
+  "exit_code": 0,
+  "signal": null,
+  "timed_out": false,
+  "stdout": "{\"folder\":\"$SANDBOX/workspace/folder\",\"file\":null}\n",
+  "stderr": ""
+}

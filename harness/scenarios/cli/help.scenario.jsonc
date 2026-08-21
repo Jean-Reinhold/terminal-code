@@ -1,0 +1,34 @@
+{
+  "$schema": "../../schemas/scenario-v1.schema.json",
+  "schema_version": 1,
+  "id": "cli.help",
+  "title": "CLI help is stable",
+  "contracts": ["C01"],
+  "risk": "medium",
+  "targets": { "mode": "single", "target": "legacy" },
+  "requires": {
+    "os": ["macos", "linux"],
+    "capabilities": ["process"],
+    "timeout_ms": 5000
+  },
+  "sandbox": { "environment": {}, "network": "not-required" },
+  "steps": [
+    {
+      "id": "invoke",
+      "kind": "process.exec",
+      "program": { "target": "tode" },
+      "args": ["--help"],
+      "stdin": "closed",
+      "capture": ["stdout", "stderr", "exit"],
+      "timeout_ms": 3000
+    }
+  ],
+  "observations": [{ "id": "result", "kind": "process.result", "from": "invoke" }],
+  "assertions": [
+    {
+      "kind": "exact.snapshot",
+      "observation": "result",
+      "snapshot": "harness/baselines/cli/help.process.json"
+    }
+  ]
+}

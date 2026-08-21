@@ -1,0 +1,34 @@
+{
+  "$schema": "../../schemas/scenario-v1.schema.json",
+  "schema_version": 1,
+  "id": "cli.goto",
+  "title": "Goto syntax parses line and column",
+  "contracts": ["C02"],
+  "risk": "high",
+  "targets": { "mode": "single", "target": "rust-core" },
+  "requires": {
+    "os": ["macos", "linux"],
+    "capabilities": ["process"],
+    "timeout_ms": 5000
+  },
+  "sandbox": { "environment": {}, "network": "not-required" },
+  "steps": [
+    {
+      "id": "probe",
+      "kind": "process.exec",
+      "program": { "target": "target-probe" },
+      "args": ["parse-goto", "src/main.ts:12:4"],
+      "stdin": "closed",
+      "capture": ["stdout", "stderr", "exit"],
+      "timeout_ms": 3000
+    }
+  ],
+  "observations": [{ "id": "result", "kind": "process.result", "from": "probe" }],
+  "assertions": [
+    {
+      "kind": "exact.snapshot",
+      "observation": "result",
+      "snapshot": "harness/baselines/cli/goto.process.json"
+    }
+  ]
+}
