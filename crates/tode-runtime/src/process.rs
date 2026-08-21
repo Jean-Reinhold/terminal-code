@@ -1,6 +1,9 @@
+use std::ffi::OsString;
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::os::unix::process::CommandExt;
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use nix::errno::Errno;
@@ -107,6 +110,137 @@ pub fn now_unix_ms() -> u128 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::ZERO)
         .as_millis()
+}
+
+#[derive(Debug, Clone)]
+pub struct CodeServerConfig {
+    pub binary: PathBuf,
+    pub port: u16,
+    pub user_data: PathBuf,
+    pub extensions: PathBuf,
+    pub log_file: PathBuf,
+    pub readiness_deadline: Duration,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ManagedProcessError {
+    #[error("query code-server version: {0}")]
+    Version(std::io::Error),
+    #[error("create code-server log: {0}")]
+    Log(std::io::Error),
+    #[error("spawn code-server: {0}")]
+    Spawn(std::io::Error),
+    #[error("code-server exited or missed readiness deadline")]
+    Readiness,
+    #[error("stop code-server: {0}")]
+    Stop(std::io::Error),
+}
+
+#[derive(Debug)]
+pub struct ManagedCodeServer {
+    child: Option<Child>,
+    pub pid: i32,
+    pub port: u16,
+    pub version: String,
+}
+
+impl ManagedCodeServer {
+    pub fn shutdown(mut self) -> Result<(), ManagedProcessError> {
+        self.stop()
+    }
+
+    fn stop(&mut self) -> Result<(), ManagedProcessError> {
+        let Some(mut child) = self.child.take() else {
+            return Ok(());
+        };
+        let _ = nix::sys::signal::killpg(Pid::from_raw(self.pid), Signal::SIGTERM);
+        child.wait().map_err(ManagedProcessError::Stop)?;
+        Ok(())
+    }
+}
+
+impl Drop for ManagedCodeServer {
+    fn drop(&mut self) {
+        let _ = self.stop();
+    }
+}
+
+pub fn code_server_arguments(port: u16, user_data: &Path, extensions: &Path) -> Vec<OsString> {
+    [
+        "--auth".into(),
+        "none".into(),
+        "--bind-addr".into(),
+        format!("127.0.0.1:{port}").into(),
+        "--user-data-dir".into(),
+        user_data.as_os_str().to_owned(),
+        "--extensions-dir".into(),
+        extensions.as_os_str().to_owned(),
+        "--app-name".into(),
+        "tode".into(),
+        "--disable-telemetry".into(),
+        "--disable-update-check".into(),
+        "--disable-workspace-trust".into(),
+        "--disable-getting-started-override".into(),
+        "--ignore-last-opened".into(),
+    ]
+    .into()
+}
+
+pub fn extensions_gallery() -> &'static str {
+    r#"{"serviceUrl":"https://marketplace.visualstudio.com/_apis/public/gallery","itemUrl":"https://marketplace.visualstudio.com/items","cacheUrl":"https://vscode.blob.core.windows.net/gallery/index","controlUrl":""}"#
+}
+
+pub async fn start_code_server(
+    config: &CodeServerConfig,
+) -> Result<ManagedCodeServer, ManagedProcessError> {
+    let version_output = Command::new(&config.binary)
+        .arg("--version")
+        .output()
+        .map_err(ManagedProcessError::Version)?;
+    let version = if version_output.status.success() {
+        String::from_utf8_lossy(&version_output.stdout)
+            .lines()
+            .next()
+            .unwrap_or("unknown")
+            .trim()
+            .to_owned()
+    } else {
+        "unknown".into()
+    };
+    if let Some(parent) = config.log_file.parent() {
+        fs::create_dir_all(parent).map_err(ManagedProcessError::Log)?;
+    }
+    let log = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&config.log_file)
+        .map_err(ManagedProcessError::Log)?;
+    let stderr = log.try_clone().map_err(ManagedProcessError::Log)?;
+    let mut command = Command::new(&config.binary);
+    command
+        .args(code_server_arguments(
+            config.port,
+            &config.user_data,
+            &config.extensions,
+        ))
+        .env("EXTENSIONS_GALLERY", extensions_gallery())
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(log))
+        .stderr(Stdio::from(stderr))
+        .process_group(0);
+    let child = command.spawn().map_err(ManagedProcessError::Spawn)?;
+    let pid = child.id() as i32;
+    let mut managed = ManagedCodeServer {
+        child: Some(child),
+        pid,
+        port: config.port,
+        version,
+    };
+    if !wait_ready(config.port, pid, config.readiness_deadline).await {
+        let _ = managed.stop();
+        return Err(ManagedProcessError::Readiness);
+    }
+    Ok(managed)
 }
 
 #[cfg(test)]
