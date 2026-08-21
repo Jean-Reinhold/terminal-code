@@ -29,3 +29,4 @@
 * **M4 managed state**: Added typed server state, PID liveness, dual-listener validation, delayed readiness, stale-state cleanup, managed SIGTERM shutdown, and injector-origin behavior in Rust.
 * **M4 managed spawn**: Added exact code-server arguments/gallery environment, version capture, process-group spawn, log ownership, readiness, and shutdown integration using a Rust probe.
 * **M4 daemon composition**: Composed managed code-server, Rust injector, combined state, warm-up, proxied origin, and complete shutdown into one Rust daemon transaction.
+* **M4 terminal-browser resolution**: Added Rust override/vendored/pinned/system-clone precedence, platform Electron layout, exact Bash launcher environment, browser homes, and executable mode.

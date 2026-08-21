@@ -5,14 +5,14 @@ contract_id: C07
 description: Preserve pinned artifact resolution, verification, readiness, warm-up, state, and shutdown.
 tags: [runtime, code-server, terminal-browser, lifecycle]
 status: draft
-implementation_status: rust-state-partial
+implementation_status: rust-existing-runtime-partial
 risk: critical
 owners: [runtime]
 surfaces: [process, filesystem, http, download]
-source_paths: [src/runtime/release.ts, src/codeserver/server.ts, src/codeserver/vendored.ts, crates/tode-runtime/src/artifact.rs, crates/tode-runtime/src/process.rs, crates/tode-runtime/src/daemon.rs, crates/tode-runtime/tests/managed_code_server.rs, crates/tode-runtime/tests/daemon.rs]
+source_paths: [src/runtime/release.ts, src/codeserver/server.ts, src/codeserver/vendored.ts, crates/tode-runtime/src/artifact.rs, crates/tode-runtime/src/browser.rs, crates/tode-runtime/src/process.rs, crates/tode-runtime/src/daemon.rs, crates/tode-runtime/tests/managed_code_server.rs, crates/tode-runtime/tests/daemon.rs]
 scenario_ids: []
 legacy_test_paths: []
-rust_test_paths: [crates/tode-runtime/src/artifact.rs, crates/tode-runtime/src/process.rs, crates/tode-runtime/src/daemon.rs, crates/tode-runtime/tests/managed_code_server.rs, crates/tode-runtime/tests/daemon.rs]
+rust_test_paths: [crates/tode-runtime/src/artifact.rs, crates/tode-runtime/src/browser.rs, crates/tode-runtime/src/process.rs, crates/tode-runtime/src/daemon.rs, crates/tode-runtime/tests/managed_code_server.rs, crates/tode-runtime/tests/daemon.rs]
 platforms: [macos, linux]
 sources:
   - { id: runtime, resource: ../../../../src/runtime/release.ts, title: Browser runtime resolution }
@@ -22,6 +22,7 @@ sources:
   - { id: rust-process, resource: ../../../../crates/tode-runtime/src/process.rs, title: Rust managed server state, readiness, and shutdown }
   - { id: rust-spawn, resource: ../../../../crates/tode-runtime/tests/managed_code_server.rs, title: Rust exact spawn and process ownership integration }
   - { id: rust-daemon, resource: ../../../../crates/tode-runtime/tests/daemon.rs, title: Composed Rust code-server/injector/state integration }
+  - { id: rust-browser, resource: ../../../../crates/tode-runtime/src/browser.rs, title: Rust terminal-browser existing-source resolver and launcher }
 ---
 
 # Contract
@@ -30,4 +31,4 @@ Prefer verified vendored/offline artifacts, preserve target triples and platform
 
 # Coverage Status
 
-Fourteen Rust tests cover verified artifacts/swaps, state/PID/readiness, exact process spawn, combined code-server/injector state, proxied origin, warm-up-safe startup, and complete shutdown/state removal. C07 remains draft until terminal-browser/code-server artifact resolution and persistent daemon command orchestration are wired.
+Eighteen Rust tests cover verified artifacts, existing-source precedence, platform Electron layout, launcher environment/mode, safe system clone, state/PID/readiness, exact code-server spawn, composed daemon, warm-up, and shutdown. C07 remains draft until release lookup/download is composed with this resolver and a persistent daemon command owns the live runtime.
