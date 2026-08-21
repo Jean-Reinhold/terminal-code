@@ -24,3 +24,4 @@
 * **M3 C12 import**: Ported settings, keybindings, snippets, tasks, extension registry/copy, reports, deduplication, and unsafe/symlink rejection to Rust.
 * **M3 C12 service completion**: Added Rust editor discovery, XDG precedence, content summaries, and extension-copy progress; the non-UI import service now has 6 integration tests.
 * **M3 theme installation**: Added Rust managed theme extension manifests, registry replacement, old fingerprint cleanup, live-theme output, and idempotent installation.
+* **M2 completion**: Ported the final release target/manifest/receipt schemas; all planned pure algorithm/schema families now exist in Rust, with fuzz/mutation expansion reserved for H6.

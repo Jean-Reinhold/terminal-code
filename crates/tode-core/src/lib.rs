@@ -3,6 +3,7 @@ pub mod color;
 pub mod ipc;
 pub mod jsonc;
 pub mod palette;
+pub mod release;
 pub mod shortcuts;
 pub mod target;
 pub mod theme;
@@ -16,6 +17,10 @@ pub use ipc::{IpcError, OpenRequest, send_to_extension};
 pub use jsonc::{parse_jsonc, read_key, set_key, set_keys};
 pub use palette::{
     ParsedReplies, Rgb, TerminalPalette, build_query, parse_color, parse_replies, with_fallbacks,
+};
+pub use release::{
+    Build, InstalledReceipt, PlatformBuild, ReleaseManifest, build_for, current_target_triple,
+    installed_receipt, latest_manifest_path, target_triple,
 };
 pub use shortcuts::{
     Binding, Decision, DecisionChoice, Decisions, FreedMove, GHOSTTY_INCLUDE_LINE,
