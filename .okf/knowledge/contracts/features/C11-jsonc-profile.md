@@ -5,20 +5,21 @@ contract_id: C11
 description: Preserve JSONC comments and unrelated bytes while enforcing managed and seeded profile settings.
 tags: [jsonc, profile, settings, keybindings]
 status: draft
-implementation_status: rust-jsonc-parity
+implementation_status: rust-profile-partial
 risk: critical
 owners: [profile]
 surfaces: [filesystem]
-source_paths: [src/jsonc.ts, src/profile.ts, crates/tode-core/src/jsonc.rs, test/theme.test.js]
+source_paths: [src/jsonc.ts, src/profile.ts, crates/tode-core/src/jsonc.rs, crates/tode-profile/src/lib.rs, test/theme.test.js]
 scenario_ids: []
 legacy_test_paths: [test/theme.test.js]
-rust_test_paths: [crates/tode-core/src/jsonc.rs]
+rust_test_paths: [crates/tode-core/src/jsonc.rs, crates/tode-profile/src/lib.rs]
 platforms: [macos, linux]
 sources:
   - { id: jsonc, resource: ../../../../src/jsonc.ts, title: Source-preserving JSONC implementation }
   - { id: profile, resource: ../../../../src/profile.ts, title: Managed profile state }
   - { id: tests, resource: ../../../../test/theme.test.js, title: JSONC/profile tests }
   - { id: rust, resource: ../../../../crates/tode-core/src/jsonc.rs, title: Rust source-preserving JSONC implementation }
+  - { id: rust-profile, resource: ../../../../crates/tode-profile/src/lib.rs, title: Rust profile paths, settings precedence, and atomic writes }
 ---
 
 # Contract
@@ -27,4 +28,4 @@ Read comments and trailing commas, return null rather than throw on malformed in
 
 # Coverage Status
 
-Five Rust tests preserve comments/unrelated keys, empty and malformed inputs, byte-stable repeated writes, comments/trailing commas/arrays, and root-only key updates. C11 remains draft until M3 wires these operations to atomic profile/keybinding filesystem updates and ports precedence/removal fixtures.
+Ten Rust tests cover source-preserving JSONC plus exact XDG/install path rules, seeded-versus-managed precedence, comments, byte idempotence, atomic mode-preserving writes, and profile creation. C11 remains draft until keybinding merge/removal, theme/font extension installation, live files, and full profile migration are wired.

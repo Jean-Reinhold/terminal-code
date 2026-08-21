@@ -685,6 +685,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tode-profile"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "tode-core",
+]
+
+[[package]]
 name = "tode-runtime"
 version = "0.1.0"
 dependencies = [

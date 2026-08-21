@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/tode-core", "crates/tode-harness", "crates/tode-runtime"]
+members = ["crates/tode-core", "crates/tode-harness", "crates/tode-profile", "crates/tode-runtime"]
 resolver = "2"
 
 [workspace.package]

@@ -20,6 +20,7 @@ sources:
 
 * Root Cargo workspace pinned to Rust 1.98.0.
 * `tode-core` Rust library with CLI identity, target/goto, Unix IPC, OSC palettes, source-preserving JSONC, complete themes, shortcut transforms, and persisted decision-derived bindings.
+* `tode-profile` Rust crate with XDG/install ownership, managed/seeded settings precedence, and atomic mode-preserving profile writes.
 * `tode-runtime` Rust HTTP/1 injector with CSS/font handling, header rewriting, readiness hold, controlled errors, and upgraded-stream bridging.
 * `tode-harness` binary/library with `catalog check`, `schema`, `run`, and `replay` commands.
 * YAML-backed OKF catalog with 22 contract concepts, draft-aware executable coverage, reciprocal scenario links, risk/owner/surface/platform/source validation, and all 119 legacy test declarations mapped.
@@ -39,11 +40,11 @@ sources:
 
 # Verified Behavior
 
-* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 46 contract-mapped Rust tests.
+* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 51 contract-mapped Rust tests.
 * C01 Rust help/version scenarios matched exact snapshots captured from the legacy CLI.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* Sixty Rust workspace tests passed:
+* Sixty-five Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
   - CLI help completeness and version receipt/fallback;
@@ -71,7 +72,8 @@ sources:
   - four sRGB/Oklch/contrast/shade/legibility tests;
   - six full-theme dark/light/surface/ANSI/WCAG/fingerprint/completeness tests;
   - eight chord/Ghostty/Kitty conversion, config, include, emit, and shared-rebind tests;
-  - four persisted shortcut claim/import/quit/fallback binding tests.
+  - four persisted shortcut claim/import/quit/fallback binding tests;
+  - five profile path/precedence/idempotence/atomic-install tests.
 * `cargo fmt --all` and strict Clippy with `-D warnings` passed.
 
 # Current Trust Boundary
@@ -95,4 +97,4 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Next Slice
 
-Continue H3 with C12 import/profile filesystem behavior while the full C14 claimant graph/convergence loop remains explicitly open. Promote the Rust contract CLI into production only when M6 command orchestration is complete.
+Continue H3/M3 with C12 settings/keybindings/snippets/tasks/extension import reports and safe tree copying. The full C14 claimant graph/convergence loop remains explicitly open.
