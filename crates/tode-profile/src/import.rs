@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use std::time::UNIX_EPOCH;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -13,6 +14,15 @@ pub struct Editor {
     pub name: String,
     pub user_dir: PathBuf,
     pub extensions_dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditorContents {
+    pub settings: bool,
+    pub keybindings: bool,
+    pub snippets: usize,
+    pub tasks: bool,
+    pub extensions: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -75,14 +85,149 @@ struct ExtensionLocation {
     mid: Option<u64>,
 }
 
-pub fn run_import(editor: &Editor, paths: &ProfilePaths) -> ImportReport {
+pub fn find_editors(home: &Path, xdg_config_home: Option<&Path>, is_macos: bool) -> Vec<Editor> {
+    let support = if is_macos {
+        home.join("Library/Application Support")
+    } else {
+        xdg_config_home
+            .filter(|path| path.is_absolute())
+            .map(Path::to_owned)
+            .unwrap_or_else(|| home.join(".config"))
+    };
+    let Ok(entries) = fs::read_dir(&support) else {
+        return Vec::new();
+    };
+    let mut editors = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let user_dir = support.join(&name).join("User");
+        let state = user_dir.join("globalStorage/state.vscdb");
+        if !state.is_file() {
+            continue;
+        }
+        let last_used = fs::metadata(&state)
+            .and_then(|metadata| metadata.modified())
+            .ok()
+            .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+            .map_or(0, |duration| duration.as_millis());
+        editors.push((
+            last_used,
+            Editor {
+                extensions_dir: find_extensions_dir(home, &name),
+                name,
+                user_dir,
+            },
+        ));
+    }
+    editors.sort_by_key(|entry| std::cmp::Reverse(entry.0));
+    editors.into_iter().map(|(_, editor)| editor).collect()
+}
+
+pub fn describe(editor: &Editor) -> EditorContents {
+    let snippets = fs::read_dir(editor.user_dir.join("snippets"))
+        .ok()
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|entry| {
+            entry
+                .path()
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| matches!(extension, "json" | "code-snippets"))
+        })
+        .count();
+    EditorContents {
+        settings: editor.user_dir.join("settings.json").is_file(),
+        keybindings: editor.user_dir.join("keybindings.json").is_file(),
+        snippets,
+        tasks: editor.user_dir.join("tasks.json").is_file(),
+        extensions: editor
+            .extensions_dir
+            .as_ref()
+            .map_or(0, |directory| count_extensions(directory)),
+    }
+}
+
+pub fn summarise(contents: &EditorContents) -> String {
+    let mut parts = Vec::new();
+    if contents.extensions > 0 {
+        parts.push(format!("{} extensions", contents.extensions));
+    }
+    if contents.settings {
+        parts.push("settings".into());
+    }
+    if contents.keybindings {
+        parts.push("keybindings".into());
+    }
+    if contents.snippets > 0 {
+        parts.push(format!("{} snippet files", contents.snippets));
+    }
+    if contents.tasks {
+        parts.push("tasks".into());
+    }
+    if parts.is_empty() {
+        "nothing to import".into()
+    } else {
+        parts.join(", ")
+    }
+}
+
+pub fn run_import_with_progress(
+    editor: &Editor,
+    paths: &ProfilePaths,
+    progress: &mut dyn FnMut(usize, usize, &str),
+) -> ImportReport {
     ImportReport {
-        extensions: import_extensions(editor, paths),
+        extensions: import_extensions(editor, paths, progress),
         settings: import_settings(editor, paths),
         keybindings: import_keybindings(editor, paths),
         snippets: import_snippets(editor, paths),
         tasks: import_tasks(editor, paths),
     }
+}
+
+pub fn run_import(editor: &Editor, paths: &ProfilePaths) -> ImportReport {
+    run_import_with_progress(editor, paths, &mut |_, _, _| {})
+}
+
+fn find_extensions_dir(home: &Path, name: &str) -> Option<PathBuf> {
+    let slug = name
+        .to_lowercase()
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .collect::<String>();
+    let first = name.split_whitespace().next().unwrap_or(name);
+    let first_slug = first
+        .to_lowercase()
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .collect::<String>();
+    let known = match name {
+        "Code" => Some(".vscode"),
+        "Code - Insiders" => Some(".vscode-insiders"),
+        "code-oss-dev" | "VSCodium" => Some(".vscode-oss"),
+        _ => None,
+    };
+    let candidates = [
+        known.map(str::to_owned),
+        Some(format!(".{slug}")),
+        Some(format!(".{first_slug}")),
+    ];
+    candidates.into_iter().flatten().find_map(|candidate| {
+        let directory = home.join(candidate).join("extensions");
+        directory
+            .join("extensions.json")
+            .is_file()
+            .then_some(directory)
+    })
+}
+
+fn count_extensions(directory: &Path) -> usize {
+    fs::read(directory.join("extensions.json"))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Vec<Value>>(&bytes).ok())
+        .map_or(0, |entries| entries.len())
 }
 
 fn import_settings(editor: &Editor, paths: &ProfilePaths) -> Option<SettingsReport> {
@@ -160,7 +305,11 @@ fn import_tasks(editor: &Editor, paths: &ProfilePaths) -> bool {
         && fs::copy(source, paths.user.join("tasks.json")).is_ok()
 }
 
-fn import_extensions(editor: &Editor, paths: &ProfilePaths) -> ExtensionsReport {
+fn import_extensions(
+    editor: &Editor,
+    paths: &ProfilePaths,
+    progress: &mut dyn FnMut(usize, usize, &str),
+) -> ExtensionsReport {
     let mut report = ExtensionsReport {
         copied: Vec::new(),
         skipped: Vec::new(),
@@ -192,7 +341,9 @@ fn import_extensions(editor: &Editor, paths: &ProfilePaths) -> ExtensionsReport 
         .map(|entry| (entry.identifier.id.clone(), entry))
         .collect();
 
-    for mut entry in listed {
+    let total = listed.len();
+    for (done, mut entry) in listed.into_iter().enumerate() {
+        progress(done + 1, total, &entry.identifier.id);
         let folder = entry
             .relative_location
             .clone()
@@ -361,7 +512,11 @@ mod tests {
         )
         .unwrap();
 
-        let report = run_import(&editor, &paths);
+        let mut progress = Vec::new();
+        let report = run_import_with_progress(&editor, &paths, &mut |done, total, id| {
+            progress.push((done, total, id.to_owned()));
+        });
+        assert_eq!(progress, [(1, 1, "acme.extension".into())]);
         assert_eq!(report.settings.as_ref().unwrap().imported, 2);
         assert_eq!(
             report.settings.as_ref().unwrap().kept_by_tode,
@@ -449,5 +604,54 @@ mod tests {
         let report = run_import(&editor, &paths);
         assert_eq!(report.extensions.skipped[0].why, "could not be copied");
         assert!(!paths.extensions.join("linked-1/link").exists());
+    }
+
+    #[test]
+    fn discovers_editors_extensions_and_contents() {
+        let root = TempDir::new().unwrap();
+        let support = root.path().join(".config/Code/User/globalStorage");
+        fs::create_dir_all(&support).unwrap();
+        fs::write(support.join("state.vscdb"), "state").unwrap();
+        let user = root.path().join(".config/Code/User");
+        fs::write(user.join("settings.json"), "{}").unwrap();
+        fs::create_dir(user.join("snippets")).unwrap();
+        fs::write(user.join("snippets/rust.code-snippets"), "{}").unwrap();
+        let extensions = root.path().join(".vscode/extensions");
+        fs::create_dir_all(&extensions).unwrap();
+        fs::write(extensions.join("extensions.json"), "[{},{}]").unwrap();
+
+        let editors = find_editors(root.path(), None, false);
+        assert_eq!(editors.len(), 1);
+        assert_eq!(editors[0].name, "Code");
+        assert_eq!(
+            editors[0].extensions_dir.as_deref(),
+            Some(extensions.as_path())
+        );
+        let contents = describe(&editors[0]);
+        assert_eq!(
+            contents,
+            EditorContents {
+                settings: true,
+                keybindings: false,
+                snippets: 1,
+                tasks: false,
+                extensions: 2,
+            }
+        );
+        assert_eq!(
+            summarise(&contents),
+            "2 extensions, settings, 1 snippet files"
+        );
+    }
+
+    #[test]
+    fn discovery_uses_absolute_xdg_and_ignores_uninitialized_directories() {
+        let root = TempDir::new().unwrap();
+        let xdg = root.path().join("xdg");
+        fs::create_dir_all(xdg.join("VSCodium/User/globalStorage")).unwrap();
+        fs::write(xdg.join("VSCodium/User/globalStorage/state.vscdb"), "state").unwrap();
+        fs::create_dir_all(xdg.join("Noise/User")).unwrap();
+        assert_eq!(find_editors(root.path(), Some(&xdg), false).len(), 1);
+        assert!(find_editors(root.path(), Some(Path::new("relative")), false).is_empty());
     }
 }

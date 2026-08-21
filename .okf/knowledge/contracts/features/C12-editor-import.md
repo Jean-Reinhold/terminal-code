@@ -5,7 +5,7 @@ contract_id: C12
 description: Preserve editor discovery and import of settings, keybindings, snippets, tasks, and extensions.
 tags: [import, editors, profile, extensions]
 status: draft
-implementation_status: rust-import-parity
+implementation_status: rust-import-service-parity
 risk: critical
 owners: [import, profile]
 surfaces: [filesystem, process, browser]
@@ -27,4 +27,4 @@ Discover compatible editors in existing precedence, import settings without over
 
 # Coverage Status
 
-Four Rust integration tests cover settings precedence/reports, keybinding deduplication, snippet/task copying, extension registry/copy, existing registry retention, missing/unsafe folders, and symlink rejection. The import pipeline is ported. C12 remains draft until editor discovery, progress callbacks, managed theme registration, embedded UI, and production command wiring are complete.
+Six Rust integration tests cover editor/extension discovery, absolute-XDG precedence, content summaries, progress events, settings precedence/reports, keybinding deduplication, snippet/task copying, extension registry/copy, existing registry retention, missing/unsafe folders, and symlink rejection. The non-UI import service is ported. C12 remains draft until managed theme registration, production command wiring, and the embedded UI are complete.

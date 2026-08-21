@@ -22,3 +22,4 @@
 * **H3 C14 partial**: Ported persisted shortcut claim/import/quit/fallback binding behavior to Rust; full manager-row claimant graph and adversarial convergence remain open.
 * **M3 C11 profile ownership**: Added `tode-profile` with exact XDG/install paths, managed/seeded settings precedence, atomic mode-preserving writes, and idempotent installation tests.
 * **M3 C12 import**: Ported settings, keybindings, snippets, tasks, extension registry/copy, reports, deduplication, and unsafe/symlink rejection to Rust.
+* **M3 C12 service completion**: Added Rust editor discovery, XDG precedence, content summaries, and extension-copy progress; the non-UI import service now has 6 integration tests.

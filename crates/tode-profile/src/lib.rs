@@ -1,7 +1,8 @@
 pub mod import;
 
 pub use import::{
-    Editor, ExtensionsReport, ImportReport, SettingsReport, SkippedExtension, run_import,
+    Editor, EditorContents, ExtensionsReport, ImportReport, SettingsReport, SkippedExtension,
+    describe, find_editors, run_import, run_import_with_progress, summarise,
 };
 
 use std::collections::BTreeMap;

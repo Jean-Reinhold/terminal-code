@@ -40,11 +40,11 @@ sources:
 
 # Verified Behavior
 
-* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 55 contract-mapped Rust tests.
+* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 57 contract-mapped Rust tests.
 * C01 Rust help/version scenarios matched exact snapshots captured from the legacy CLI.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* Sixty-nine Rust workspace tests passed:
+* Seventy-one Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
   - CLI help completeness and version receipt/fallback;
@@ -74,7 +74,7 @@ sources:
   - eight chord/Ghostty/Kitty conversion, config, include, emit, and shared-rebind tests;
   - four persisted shortcut claim/import/quit/fallback binding tests;
   - five profile path/precedence/idempotence/atomic-install tests;
-  - four import settings/keybindings/snippets/tasks/extensions safety/report tests.
+  - six import discovery/progress/settings/keybindings/snippets/tasks/extensions safety/report tests.
 * `cargo fmt --all` and strict Clippy with `-D warnings` passed.
 
 # Current Trust Boundary
@@ -98,4 +98,4 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Next Slice
 
-Continue M3/C12 with editor discovery, import progress events, managed theme registration, and production command/UI wiring. The full C14 claimant graph/convergence loop remains explicitly open.
+Continue M3 with managed theme/font/bridge extension installation and production import command wiring. The full C14 claimant graph/convergence loop remains explicitly open.
