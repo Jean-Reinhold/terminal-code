@@ -16,11 +16,13 @@ use wait_timeout::ChildExt;
 
 use crate::artifact::{ArtifactRef, ArtifactStore, write_json_atomic};
 use crate::error::{HarnessError, Result};
+use crate::lease::LeaseBroker;
 use crate::sandbox::Sandbox;
 use crate::scenario::{
     AssertionSpec, NormalizationSpec, ObservationSpec, Scenario, Step, TargetSelection,
     canonical_scenario, load_scenario, validate_relative,
 };
+use crate::socket::SocketPeer;
 use crate::target::{
     ResolvedProgram, TargetManifest, load_target_manifest, resolve_program, sha256_file,
 };
@@ -129,7 +131,10 @@ impl RunPolicy {
             )));
         }
         for step in &scenario.steps {
-            let Step::ProcessExec { timeout_ms, id, .. } = step;
+            let (id, timeout_ms) = match step {
+                Step::ProcessExec { id, timeout_ms, .. }
+                | Step::UnixSocketServer { id, timeout_ms, .. } => (id, timeout_ms),
+            };
             if *timeout_ms > self.max_step_timeout_ms {
                 return Err(HarnessError::Invalid(format!(
                     "scenario {} step {id} timeout {timeout_ms}ms exceeds policy maximum {}ms",
@@ -183,7 +188,30 @@ struct ProcessObservation {
 struct ObservationRecord {
     target_id: String,
     observation_id: String,
-    process: ProcessObservation,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    process: Option<ProcessObservation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    unix_socket: Option<ArtifactRef>,
+}
+
+impl ObservationRecord {
+    fn process(&self) -> Result<&ProcessObservation> {
+        self.process.as_ref().ok_or_else(|| {
+            HarnessError::Integrity(format!(
+                "observation {} for target {} is not a process result",
+                self.observation_id, self.target_id
+            ))
+        })
+    }
+
+    fn unix_socket(&self) -> Result<&ArtifactRef> {
+        self.unix_socket.as_ref().ok_or_else(|| {
+            HarnessError::Integrity(format!(
+                "observation {} for target {} is not a Unix socket transcript",
+                self.observation_id, self.target_id
+            ))
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -284,7 +312,9 @@ pub fn run(config: &RunConfig) -> Result<RunOutcome> {
             .get(target_id)
             .ok_or_else(|| HarnessError::Invalid(format!("missing target manifest {target_id}")))?;
         for step in &scenario.steps {
-            let Step::ProcessExec { program, .. } = step;
+            let Step::ProcessExec { program, .. } = step else {
+                continue;
+            };
             let key = (target_id.to_owned(), program.target.clone());
             if resolved.contains_key(&key) {
                 continue;
@@ -345,37 +375,91 @@ pub fn run(config: &RunConfig) -> Result<RunOutcome> {
     for target_id in scenario.targets.ids() {
         events.append("provisioning", format!("target {target_id}"))?;
         let sandbox = Sandbox::create(&repo_root, scenario.sandbox.fixture.as_deref())?;
-        let environment = sandbox.environment(&scenario.sandbox.environment)?;
-        let mut step_results = BTreeMap::new();
+        let mut environment = sandbox.environment(&scenario.sandbox.environment)?;
+        let mut lease_broker = LeaseBroker::new()?;
+        let mut socket_peers = BTreeMap::new();
+        let mut process_results = BTreeMap::new();
         events.append("executing", format!("target {target_id}"))?;
         for step in &scenario.steps {
-            let Step::ProcessExec { id, program, .. } = step;
-            let resolved_program = resolved
-                .get(&(target_id.to_owned(), program.target.clone()))
-                .expect("resolved program exists");
-            let result = execute_process(
-                step,
-                resolved_program,
-                &sandbox,
-                &environment,
-                plan.policy.max_output_bytes,
-            )?;
-            step_results.insert(id.clone(), result);
+            match step {
+                Step::UnixSocketServer {
+                    id,
+                    environment: environment_name,
+                    reply,
+                    max_request_bytes,
+                    timeout_ms,
+                } => {
+                    let peer = SocketPeer::start(
+                        &mut lease_broker,
+                        id,
+                        reply.clone(),
+                        *max_request_bytes,
+                        Duration::from_millis(*timeout_ms),
+                    )?;
+                    if environment
+                        .insert(
+                            environment_name.clone(),
+                            peer.path().to_string_lossy().into_owned(),
+                        )
+                        .is_some()
+                    {
+                        return Err(HarnessError::Invalid(format!(
+                            "socket environment {environment_name} already exists"
+                        )));
+                    }
+                    socket_peers.insert(id.clone(), peer);
+                }
+                Step::ProcessExec { id, program, .. } => {
+                    let resolved_program = resolved
+                        .get(&(target_id.to_owned(), program.target.clone()))
+                        .expect("resolved program exists");
+                    let result = execute_process(
+                        step,
+                        resolved_program,
+                        &sandbox,
+                        &environment,
+                        plan.policy.max_output_bytes,
+                    )?;
+                    process_results.insert(id.clone(), result);
+                }
+            }
         }
         events.append("observing", format!("target {target_id}"))?;
         for observation in &scenario.observations {
-            let ObservationSpec::ProcessResult { id, from } = observation;
-            let process = step_results.get(from).ok_or_else(|| {
-                HarnessError::Invalid(format!("missing process result for step {from}"))
-            })?;
-            observations.push(seal_process_observation(
-                target_id,
-                id,
-                process,
-                &scenario.normalization,
-                &sandbox,
-                &store,
-            )?);
+            match observation {
+                ObservationSpec::ProcessResult { id, from } => {
+                    let process = process_results.get(from).ok_or_else(|| {
+                        HarnessError::Invalid(format!("missing process result for step {from}"))
+                    })?;
+                    observations.push(seal_process_observation(
+                        target_id,
+                        id,
+                        process,
+                        &scenario.normalization,
+                        &sandbox,
+                        &store,
+                    )?);
+                }
+                ObservationSpec::UnixSocketTranscript { id, from } => {
+                    let peer = socket_peers.remove(from).ok_or_else(|| {
+                        HarnessError::Invalid(format!("missing socket peer for step {from}"))
+                    })?;
+                    let transcript = peer.finish()?;
+                    let bytes = serde_json::to_vec(&transcript)
+                        .map_err(|error| HarnessError::Json(error.to_string()))?;
+                    observations.push(ObservationRecord {
+                        target_id: target_id.to_owned(),
+                        observation_id: id.clone(),
+                        process: None,
+                        unix_socket: Some(store.put(&bytes, "application/json")?),
+                    });
+                }
+            }
+        }
+        if !socket_peers.is_empty() {
+            return Err(HarnessError::Invalid(format!(
+                "target {target_id} has unobserved Unix socket peers"
+            )));
         }
     }
 
@@ -501,14 +585,27 @@ pub fn replay(repo_root: &Path, artifact_root: &Path, run_id: &str) -> Result<Re
     let stored_assertions: Vec<AssertionRecord> =
         read_json(&run_directory.join("assertions.json"))?;
     for observation in &observations {
-        for reference in [
-            &observation.process.stdout_raw,
-            &observation.process.stderr_raw,
-            &observation.process.stdout_normalized,
-            &observation.process.stderr_normalized,
-            &observation.process.sandbox_tree,
-        ] {
-            store.get(reference)?;
+        match (&observation.process, &observation.unix_socket) {
+            (Some(process), None) => {
+                for reference in [
+                    &process.stdout_raw,
+                    &process.stderr_raw,
+                    &process.stdout_normalized,
+                    &process.stderr_normalized,
+                    &process.sandbox_tree,
+                ] {
+                    store.get(reference)?;
+                }
+            }
+            (None, Some(transcript)) => {
+                store.get(transcript)?;
+            }
+            _ => {
+                return Err(HarnessError::Integrity(format!(
+                    "observation {} has invalid variant fields",
+                    observation.observation_id
+                )));
+            }
         }
     }
     for expected in plan.expectations.iter().flatten() {
@@ -559,7 +656,12 @@ fn execute_process(
         args,
         timeout_ms,
         ..
-    } = step;
+    } = step
+    else {
+        return Err(HarnessError::Integrity(
+            "process adapter received a non-process step".into(),
+        ));
+    };
     let stdout_path = sandbox.log_path(&format!("{id}.stdout"))?;
     let stderr_path = sandbox.log_path(&format!("{id}.stderr"))?;
     let stdout = File::create(&stdout_path)
@@ -679,7 +781,7 @@ fn seal_process_observation(
     Ok(ObservationRecord {
         target_id: target_id.to_owned(),
         observation_id: observation_id.to_owned(),
-        process: ProcessObservation {
+        process: Some(ProcessObservation {
             exit_code: result.exit_code,
             signal: result.signal,
             timed_out: result.timed_out,
@@ -689,7 +791,8 @@ fn seal_process_observation(
             stderr_normalized,
             sandbox_tree,
             process_group_clean: result.process_group_clean,
-        },
+        }),
+        unix_socket: None,
     })
 }
 
@@ -711,6 +814,16 @@ fn prepare_expectations(
                     .map_err(|error| HarnessError::Json(format!("{}: {error}", path.display())))?;
                 expectations.push(Some(store.put(&bytes, "application/json")?));
             }
+            AssertionSpec::ExactJson { snapshot, .. } => {
+                validate_relative(snapshot, "snapshot path", &PathBuf::from(&scenario.id))?;
+                let path = repo_root.join(snapshot);
+                let bytes = fs::read(&path).map_err(|error| {
+                    HarnessError::io(format!("read snapshot {}", path.display()), error)
+                })?;
+                let _: serde_json::Value = serde_json::from_slice(&bytes)
+                    .map_err(|error| HarnessError::Json(format!("{}: {error}", path.display())))?;
+                expectations.push(Some(store.put(&bytes, "application/json")?));
+            }
             AssertionSpec::DifferentialEqual { .. } => expectations.push(None),
         }
     }
@@ -728,7 +841,7 @@ fn evaluate_assertions(
             "assertion expectation count mismatch".into(),
         ));
     }
-    let mut records = Vec::with_capacity(scenario.assertions.len());
+    let mut records = Vec::with_capacity(scenario.assertions.len() + observations.len());
     for (assertion, expected_ref) in scenario.assertions.iter().zip(expectations) {
         match assertion {
             AssertionSpec::ExactSnapshot { observation, .. } => {
@@ -736,30 +849,31 @@ fn evaluate_assertions(
                     unreachable!("scenario validation enforces assertion mode")
                 };
                 let observed = find_observation(observations, target, observation)?;
+                let process = observed.process()?;
                 let expected_ref = expected_ref.clone().ok_or_else(|| {
                     HarnessError::Integrity("exact assertion missing expected artifact".into())
                 })?;
                 let expected: ExpectedProcess = serde_json::from_slice(&store.get(&expected_ref)?)
                     .map_err(|error| HarnessError::Json(error.to_string()))?;
-                let actual_stdout = decode(store.get(&observed.process.stdout_normalized)?)?;
-                let actual_stderr = decode(store.get(&observed.process.stderr_normalized)?)?;
+                let actual_stdout = decode(store.get(&process.stdout_normalized)?)?;
+                let actual_stderr = decode(store.get(&process.stderr_normalized)?)?;
                 let mut differences = Vec::new();
-                if observed.process.exit_code != expected.exit_code {
+                if process.exit_code != expected.exit_code {
                     differences.push(format!(
                         "exit expected {:?}, got {:?}",
-                        expected.exit_code, observed.process.exit_code
+                        expected.exit_code, process.exit_code
                     ));
                 }
-                if observed.process.signal != expected.signal {
+                if process.signal != expected.signal {
                     differences.push(format!(
                         "signal expected {:?}, got {:?}",
-                        expected.signal, observed.process.signal
+                        expected.signal, process.signal
                     ));
                 }
-                if observed.process.timed_out != expected.timed_out {
+                if process.timed_out != expected.timed_out {
                     differences.push(format!(
                         "timed_out expected {}, got {}",
-                        expected.timed_out, observed.process.timed_out
+                        expected.timed_out, process.timed_out
                     ));
                 }
                 if actual_stdout != expected.stdout {
@@ -788,6 +902,33 @@ fn evaluate_assertions(
                     },
                 });
             }
+            AssertionSpec::ExactJson { observation, .. } => {
+                let TargetSelection::Single { target } = &scenario.targets else {
+                    unreachable!("scenario validation enforces assertion mode")
+                };
+                let observed = find_observation(observations, target, observation)?;
+                let expected_ref = expected_ref.clone().ok_or_else(|| {
+                    HarnessError::Integrity("exact JSON assertion missing expected artifact".into())
+                })?;
+                let expected: serde_json::Value =
+                    serde_json::from_slice(&store.get(&expected_ref)?)
+                        .map_err(|error| HarnessError::Json(error.to_string()))?;
+                let actual: serde_json::Value =
+                    serde_json::from_slice(&store.get(observed.unix_socket()?)?)
+                        .map_err(|error| HarnessError::Json(error.to_string()))?;
+                let passed = actual == expected;
+                records.push(AssertionRecord {
+                    kind: "exact.json".into(),
+                    observation_id: observation.clone(),
+                    expected: Some(expected_ref),
+                    passed,
+                    message: if passed {
+                        "exact JSON snapshot matched".into()
+                    } else {
+                        "JSON snapshot differs".into()
+                    },
+                });
+            }
             AssertionSpec::DifferentialEqual { observation } => {
                 let TargetSelection::Differential { left, right } = &scenario.targets else {
                     unreachable!("scenario validation enforces assertion mode")
@@ -795,32 +936,45 @@ fn evaluate_assertions(
                 let left = find_observation(observations, left, observation)?;
                 let right = find_observation(observations, right, observation)?;
                 let mut differences = Vec::new();
-                if left.process.exit_code != right.process.exit_code {
-                    differences.push("exit code differs".to_owned());
-                }
-                if left.process.signal != right.process.signal {
-                    differences.push("signal differs".to_owned());
-                }
-                if left.process.timed_out != right.process.timed_out {
-                    differences.push("timeout state differs".to_owned());
-                }
-                if store.get(&left.process.stdout_normalized)?
-                    != store.get(&right.process.stdout_normalized)?
-                {
-                    differences.push("stdout differs".to_owned());
-                }
-                if store.get(&left.process.stderr_normalized)?
-                    != store.get(&right.process.stderr_normalized)?
-                {
-                    differences.push("stderr differs".to_owned());
-                }
-                if store.get(&left.process.sandbox_tree)?
-                    != store.get(&right.process.sandbox_tree)?
-                {
-                    differences.push("filesystem tree differs".to_owned());
-                }
-                if left.process.process_group_clean != right.process.process_group_clean {
-                    differences.push("process-group cleanup differs".to_owned());
+                match (
+                    &left.process,
+                    &right.process,
+                    &left.unix_socket,
+                    &right.unix_socket,
+                ) {
+                    (Some(left), Some(right), None, None) => {
+                        if left.exit_code != right.exit_code {
+                            differences.push("exit code differs".to_owned());
+                        }
+                        if left.signal != right.signal {
+                            differences.push("signal differs".to_owned());
+                        }
+                        if left.timed_out != right.timed_out {
+                            differences.push("timeout state differs".to_owned());
+                        }
+                        if store.get(&left.stdout_normalized)?
+                            != store.get(&right.stdout_normalized)?
+                        {
+                            differences.push("stdout differs".to_owned());
+                        }
+                        if store.get(&left.stderr_normalized)?
+                            != store.get(&right.stderr_normalized)?
+                        {
+                            differences.push("stderr differs".to_owned());
+                        }
+                        if store.get(&left.sandbox_tree)? != store.get(&right.sandbox_tree)? {
+                            differences.push("filesystem tree differs".to_owned());
+                        }
+                        if left.process_group_clean != right.process_group_clean {
+                            differences.push("process-group cleanup differs".to_owned());
+                        }
+                    }
+                    (None, None, Some(left), Some(right)) => {
+                        if store.get(left)? != store.get(right)? {
+                            differences.push("Unix socket transcript differs".to_owned());
+                        }
+                    }
+                    _ => differences.push("observation types differ".to_owned()),
                 }
                 records.push(AssertionRecord {
                     kind: "differential.equal".into(),
@@ -828,7 +982,7 @@ fn evaluate_assertions(
                     expected: None,
                     passed: differences.is_empty(),
                     message: if differences.is_empty() {
-                        "differential process observations matched".into()
+                        "differential observations matched".into()
                     } else {
                         differences.join("; ")
                     },
@@ -837,12 +991,15 @@ fn evaluate_assertions(
         }
     }
     for observation in observations {
+        let Some(process) = &observation.process else {
+            continue;
+        };
         records.push(AssertionRecord {
             kind: "invariant.process-group-clean".into(),
             observation_id: observation.observation_id.clone(),
             expected: None,
-            passed: observation.process.process_group_clean,
-            message: if observation.process.process_group_clean {
+            passed: process.process_group_clean,
+            message: if process.process_group_clean {
                 format!("target {} process group is clean", observation.target_id)
             } else {
                 format!("target {} leaked its process group", observation.target_id)
@@ -851,7 +1008,6 @@ fn evaluate_assertions(
     }
     Ok(records)
 }
-
 fn find_observation<'a>(
     observations: &'a [ObservationRecord],
     target: &str,

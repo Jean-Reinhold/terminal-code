@@ -1,5 +1,6 @@
 use std::env;
-use std::io::{self, Write};
+use std::io::{self, BufRead, BufReader, Write};
+use std::os::unix::net::UnixStream;
 use std::process::ExitCode;
 use std::thread;
 use std::time::Duration;
@@ -58,6 +59,23 @@ fn execute() -> Result<(), String> {
             io::stdout()
                 .write_all(&vec![b'x'; count])
                 .map_err(|error| format!("write output: {error}"))?;
+        }
+        "ipc-json" => {
+            let request = one_argument(&mode, &arguments)?;
+            serde_json::from_str::<serde_json::Value>(request)
+                .map_err(|error| format!("parse request JSON: {error}"))?;
+            let socket = env::var("TODE_IPC").map_err(|_| "TODE_IPC is not set".to_owned())?;
+            let mut stream = UnixStream::connect(&socket)
+                .map_err(|error| format!("connect {socket}: {error}"))?;
+            stream
+                .write_all(request.as_bytes())
+                .and_then(|()| stream.write_all(b"\n"))
+                .map_err(|error| format!("write request: {error}"))?;
+            let mut response = String::new();
+            BufReader::new(stream)
+                .read_line(&mut response)
+                .map_err(|error| format!("read response: {error}"))?;
+            print!("{response}");
         }
         _ => return Err(format!("unknown mode {mode}")),
     }

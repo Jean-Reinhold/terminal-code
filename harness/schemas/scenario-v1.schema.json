@@ -27,6 +27,27 @@
           "additionalProperties": false,
           "properties": {
             "kind": {
+              "const": "exact.json",
+              "type": "string"
+            },
+            "observation": {
+              "type": "string"
+            },
+            "snapshot": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "observation",
+            "snapshot"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
               "const": "differential.equal",
               "type": "string"
             },
@@ -95,6 +116,27 @@
             },
             "kind": {
               "const": "process.result",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "id",
+            "from"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "from": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "unix_socket.transcript",
               "type": "string"
             }
           },
@@ -286,6 +328,41 @@
             "program",
             "stdin",
             "capture",
+            "timeout_ms"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "environment": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "unix_socket.server",
+              "type": "string"
+            },
+            "max_request_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "reply": true,
+            "timeout_ms": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "id",
+            "environment",
+            "reply",
+            "max_request_bytes",
             "timeout_ms"
           ],
           "type": "object"

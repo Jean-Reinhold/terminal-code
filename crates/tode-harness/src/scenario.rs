@@ -105,12 +105,20 @@ pub enum Step {
         capture: Vec<ProcessCapture>,
         timeout_ms: u64,
     },
+    #[serde(rename = "unix_socket.server")]
+    UnixSocketServer {
+        id: String,
+        environment: String,
+        reply: serde_json::Value,
+        max_request_bytes: u64,
+        timeout_ms: u64,
+    },
 }
 
 impl Step {
     pub fn id(&self) -> &str {
         match self {
-            Self::ProcessExec { id, .. } => id,
+            Self::ProcessExec { id, .. } | Self::UnixSocketServer { id, .. } => id,
         }
     }
 }
@@ -149,18 +157,20 @@ pub enum ProcessCapture {
 pub enum ObservationSpec {
     #[serde(rename = "process.result")]
     ProcessResult { id: String, from: String },
+    #[serde(rename = "unix_socket.transcript")]
+    UnixSocketTranscript { id: String, from: String },
 }
 
 impl ObservationSpec {
     pub fn id(&self) -> &str {
         match self {
-            Self::ProcessResult { id, .. } => id,
+            Self::ProcessResult { id, .. } | Self::UnixSocketTranscript { id, .. } => id,
         }
     }
 
     pub fn source_step(&self) -> &str {
         match self {
-            Self::ProcessResult { from, .. } => from,
+            Self::ProcessResult { from, .. } | Self::UnixSocketTranscript { from, .. } => from,
         }
     }
 }
@@ -180,6 +190,11 @@ pub enum AssertionSpec {
         observation: String,
         snapshot: String,
     },
+    #[serde(rename = "exact.json")]
+    ExactJson {
+        observation: String,
+        snapshot: String,
+    },
     #[serde(rename = "differential.equal")]
     DifferentialEqual { observation: String },
 }
@@ -187,9 +202,9 @@ pub enum AssertionSpec {
 impl AssertionSpec {
     pub fn observation(&self) -> &str {
         match self {
-            Self::ExactSnapshot { observation, .. } | Self::DifferentialEqual { observation } => {
-                observation
-            }
+            Self::ExactSnapshot { observation, .. }
+            | Self::ExactJson { observation, .. }
+            | Self::DifferentialEqual { observation } => observation,
         }
     }
 }
@@ -287,7 +302,7 @@ fn validate_scenario(scenario: &Scenario, path: &Path) -> Result<()> {
     if scenario.requires.timeout_ms == 0 {
         return invalid(path, "requires.timeout_ms must be positive");
     }
-    let supported_capabilities = ["filesystem", "process"];
+    let supported_capabilities = ["filesystem", "process", "unix-socket"];
     for capability in &scenario.requires.capabilities {
         if !supported_capabilities.contains(&capability.as_str()) {
             return invalid(path, format!("unsupported capability {capability}"));
@@ -311,6 +326,8 @@ fn validate_scenario(scenario: &Scenario, path: &Path) -> Result<()> {
     }
 
     let mut step_ids = BTreeSet::new();
+    let mut socket_environments = BTreeSet::new();
+    let mut seen_process = false;
     for step in &scenario.steps {
         validate_identifier(step.id(), "step id", path)?;
         if !step_ids.insert(step.id()) {
@@ -324,6 +341,7 @@ fn validate_scenario(scenario: &Scenario, path: &Path) -> Result<()> {
                 timeout_ms,
                 ..
             } => {
+                seen_process = true;
                 validate_identifier(&program.target, "program target", path)?;
                 if *timeout_ms == 0 || *timeout_ms > scenario.requires.timeout_ms {
                     return invalid(
@@ -350,6 +368,31 @@ fn validate_scenario(scenario: &Scenario, path: &Path) -> Result<()> {
                     }
                 }
             }
+            Step::UnixSocketServer {
+                environment,
+                max_request_bytes,
+                timeout_ms,
+                ..
+            } => {
+                if seen_process {
+                    return invalid(path, "socket server steps must precede process steps");
+                }
+                validate_environment_name(environment, path)?;
+                if scenario.sandbox.environment.contains_key(environment)
+                    || !socket_environments.insert(environment)
+                {
+                    return invalid(path, format!("duplicate socket environment {environment}"));
+                }
+                if *max_request_bytes == 0 || *max_request_bytes > 65_536 {
+                    return invalid(path, "socket max_request_bytes must be between 1 and 65536");
+                }
+                if *timeout_ms == 0 || *timeout_ms > scenario.requires.timeout_ms {
+                    return invalid(
+                        path,
+                        "socket timeout must be positive and within run timeout",
+                    );
+                }
+            }
         }
     }
     if step_ids.is_empty() {
@@ -365,19 +408,69 @@ fn validate_scenario(scenario: &Scenario, path: &Path) -> Result<()> {
                 format!("duplicate observation id {}", observation.id()),
             );
         }
-        if !step_ids.contains(observation.source_step()) {
+        let Some(source) = scenario
+            .steps
+            .iter()
+            .find(|step| step.id() == observation.source_step())
+        else {
             return invalid(
                 path,
                 format!("unknown source step {}", observation.source_step()),
+            );
+        };
+        if !matches!(
+            (observation, source),
+            (
+                ObservationSpec::ProcessResult { .. },
+                Step::ProcessExec { .. }
+            ) | (
+                ObservationSpec::UnixSocketTranscript { .. },
+                Step::UnixSocketServer { .. }
+            )
+        ) {
+            return invalid(
+                path,
+                format!(
+                    "observation {} has incompatible source step {}",
+                    observation.id(),
+                    observation.source_step()
+                ),
             );
         }
     }
     if observation_ids.is_empty() {
         return invalid(path, "at least one observation is required");
     }
+    for step in &scenario.steps {
+        if matches!(step, Step::UnixSocketServer { .. }) {
+            let transcripts = scenario
+                .observations
+                .iter()
+                .filter(|observation| {
+                    matches!(
+                        observation,
+                        ObservationSpec::UnixSocketTranscript { from, .. } if from == step.id()
+                    )
+                })
+                .count();
+            if transcripts != 1 {
+                return invalid(
+                    path,
+                    format!(
+                        "socket server step {} requires exactly one transcript observation",
+                        step.id()
+                    ),
+                );
+            }
+        }
+    }
 
     for normalization in &scenario.normalization {
-        if !observation_ids.contains(normalization.observation.as_str()) {
+        let Some(observation) = scenario
+            .observations
+            .iter()
+            .find(|observation| observation.id() == normalization.observation)
+        else {
             return invalid(
                 path,
                 format!(
@@ -385,12 +478,15 @@ fn validate_scenario(scenario: &Scenario, path: &Path) -> Result<()> {
                     normalization.observation
                 ),
             );
-        }
+        };
         if normalization.normalizer != "path.sandbox-root-v1" {
             return invalid(
                 path,
                 format!("unknown normalizer {}", normalization.normalizer),
             );
+        }
+        if matches!(observation, ObservationSpec::UnixSocketTranscript { .. }) {
+            return invalid(path, "path normalizer does not apply to socket transcript");
         }
     }
 
@@ -409,6 +505,12 @@ fn validate_scenario(scenario: &Scenario, path: &Path) -> Result<()> {
                 validate_relative(snapshot, "snapshot path", path)?;
                 if !matches!(scenario.targets, TargetSelection::Single { .. }) {
                     return invalid(path, "exact.snapshot requires single target mode");
+                }
+            }
+            AssertionSpec::ExactJson { snapshot, .. } => {
+                validate_relative(snapshot, "snapshot path", path)?;
+                if !matches!(scenario.targets, TargetSelection::Single { .. }) {
+                    return invalid(path, "exact.json requires single target mode");
                 }
             }
             AssertionSpec::DifferentialEqual { .. } => {
@@ -457,6 +559,30 @@ fn validate_identifier(value: &str, label: &str, path: &Path) -> Result<()> {
         })
     {
         return invalid(path, format!("{label} has invalid characters: {value}"));
+    }
+    Ok(())
+}
+
+fn validate_environment_name(value: &str, path: &Path) -> Result<()> {
+    if value.is_empty()
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_')
+        || matches!(
+            value,
+            "HOME"
+                | "PATH"
+                | "XDG_DATA_HOME"
+                | "XDG_STATE_HOME"
+                | "XDG_CACHE_HOME"
+                | "XDG_CONFIG_HOME"
+                | "XDG_BIN_HOME"
+                | "TODE_INSTALL_ROOT"
+        )
+        || value.starts_with("DYLD_")
+        || value.starts_with("LD_")
+    {
+        return invalid(path, format!("unsafe socket environment name: {value}"));
     }
     Ok(())
 }

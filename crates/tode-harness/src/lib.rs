@@ -5,6 +5,7 @@ pub mod lease;
 pub mod runner;
 pub mod sandbox;
 pub mod scenario;
+pub mod socket;
 pub mod target;
 
 pub use error::{HarnessError, Result};

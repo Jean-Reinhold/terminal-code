@@ -11,3 +11,4 @@
 * **H0 completion**: Decomposed C01-C22 into individual contract concepts, mapped all 119 legacy test declarations, replaced the CommonJS target probe with Rust `tode-core`/`tode-contract-probe`, and verified four C02 Rust scenarios against legacy-derived snapshots.
 * **H1 completion**: Added explicit sealed run plans, pre-side-effect policy limits, plan-bound evidence roots, plan-owned replay expectations, tamper detection, and fail-closed retry declarations.
 * **H2 progress**: Added held TCP/Unix-socket leases, canonical filesystem-tree evidence, file content artifacts, process output budgets, process-group cleanup invariants, and timeout/cleanup tests.
+* **H2 completion**: Added canonical filesystem evidence, held port/socket leases, output budgets, process cleanup invariants, bounded Unix JSON-line peers, transcript assertions, timeout/oversize failures, and replayable C05 evidence.

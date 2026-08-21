@@ -5,11 +5,13 @@ contract_id: C05
 description: Preserve TODE_IPC Unix-socket discovery, JSON-line framing, replies, timeouts, and wait behavior.
 tags: [ipc, unix-socket, cli, wait]
 status: draft
+implementation_status: harness-peer-only
 risk: critical
 owners: [protocol, cli]
 surfaces: [unix-socket, cli, process]
 source_paths: [src/ipc.ts, src/bridge/extension.ts, test/livesync.test.js]
-scenario_ids: []
+scenario_ids:
+  - ipc.window-reuse.success
 legacy_test_paths: [test/livesync.test.js]
 platforms: [macos, linux]
 sources:
@@ -24,4 +26,4 @@ Use `TODE_IPC` only when it names a socket. Send one UTF-8 JSON request plus new
 
 # Coverage Status
 
-The live-sync suite covers part of the socket path. H3 must split request/reply/wait/error cases into deterministic Rust socket-peer scenarios.
+The [Rust success scenario](../../../../harness/scenarios/ipc/window-reuse-success.scenario.jsonc) proves held socket leasing, typed `TODE_IPC` injection, bounded JSON-line request/reply, process output, transcript artifact, and replay. C05 remains draft until H3 adds refusal, unreadable reply, default timeout, and wait-completion scenarios against the Rust IPC client.

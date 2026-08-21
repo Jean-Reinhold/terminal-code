@@ -1,0 +1,50 @@
+{
+  "$schema": "../../schemas/scenario-v1.schema.json",
+  "schema_version": 1,
+  "id": "ipc.window-reuse.success",
+  "title": "Existing window accepts a JSON-line open request",
+  "contracts": ["C05"],
+  "risk": "critical",
+  "targets": { "mode": "single", "target": "rust-core" },
+  "requires": {
+    "os": ["macos", "linux"],
+    "capabilities": ["process", "unix-socket"],
+    "timeout_ms": 5000
+  },
+  "sandbox": { "environment": {}, "network": "not-required" },
+  "steps": [
+    {
+      "id": "window",
+      "kind": "unix_socket.server",
+      "environment": "TODE_IPC",
+      "reply": { "ok": true },
+      "max_request_bytes": 4096,
+      "timeout_ms": 2000
+    },
+    {
+      "id": "client",
+      "kind": "process.exec",
+      "program": { "target": "target-probe" },
+      "args": ["ipc-json", "{\"files\":[],\"folders\":[],\"add\":false}"],
+      "stdin": "closed",
+      "capture": ["stdout", "stderr", "exit"],
+      "timeout_ms": 3000
+    }
+  ],
+  "observations": [
+    { "id": "result", "kind": "process.result", "from": "client" },
+    { "id": "wire", "kind": "unix_socket.transcript", "from": "window" }
+  ],
+  "assertions": [
+    {
+      "kind": "exact.snapshot",
+      "observation": "result",
+      "snapshot": "harness/baselines/ipc/window-reuse-success.process.json"
+    },
+    {
+      "kind": "exact.json",
+      "observation": "wire",
+      "snapshot": "harness/baselines/ipc/window-reuse-success.transcript.json"
+    }
+  ]
+}
