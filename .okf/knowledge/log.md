@@ -19,3 +19,4 @@
 * **H3 C10 parity**: Ported complete sRGB/Oklch color math and the full workbench/token theme generator to Rust; 10 tests raise mapped Rust contract coverage to 32.
 * **H3 C13 parity**: Ported chord normalization plus Ghostty/Kitty trigger, config, include, emit, and shared-rebind transforms to Rust; 8 tests raise mapped Rust coverage to 40.
 * **H3 C01 parity**: Ported exact help/version identity to Rust, switched both C01 scenarios to `tode-contract-cli`, and removed the final Node target manifest from active harness execution.
+* **H3 C14 partial**: Ported persisted shortcut claim/import/quit/fallback binding behavior to Rust; full manager-row claimant graph and adversarial convergence remain open.

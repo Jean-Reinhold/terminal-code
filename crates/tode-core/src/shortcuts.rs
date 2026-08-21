@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 const MODS: [&str; 4] = ["ctrl", "shift", "alt", "cmd"];
 pub const GHOSTTY_INCLUDE_LINE: &str = "config-file = ?tode/keybinds.ghostty";
@@ -10,6 +11,164 @@ pub struct FreedMove {
     pub to: Option<String>,
     pub action: Option<String>,
     pub emit: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DecisionChoice {
+    Terminal,
+    Editor,
+    Keep,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Decision {
+    pub choice: DecisionChoice,
+    pub key: Option<String>,
+    pub action: Option<String>,
+    pub guard: Option<String>,
+    pub owner_terminal: bool,
+    pub command: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Decisions {
+    pub version: u8,
+    pub terminal: String,
+    pub choices: BTreeMap<String, Decision>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Binding {
+    pub key: String,
+    pub command: String,
+    pub when: Option<String>,
+}
+
+pub fn quit_chord(is_macos: bool) -> &'static str {
+    if is_macos { "ctrl+c" } else { "ctrl+q" }
+}
+
+pub fn claim_bindings(decisions: &Decisions) -> Vec<Binding> {
+    let mut output = Vec::new();
+    for (id, decision) in &decisions.choices {
+        if !id.starts_with("claim:")
+            || decision.owner_terminal
+            || decision.choice != DecisionChoice::Terminal
+        {
+            continue;
+        }
+        let Some(action) = &decision.action else {
+            continue;
+        };
+        let rest = &id["claim:".len()..];
+        let chord = rest.split_once(':').map_or(rest, |(chord, _)| chord);
+        output.push(Binding {
+            key: chord.into(),
+            command: format!("-{action}"),
+            when: None,
+        });
+        if let Some(key) = &decision.key {
+            output.push(Binding {
+                key: key.clone(),
+                command: action.clone(),
+                when: decision.guard.clone(),
+            });
+        }
+    }
+    output
+}
+
+pub fn override_bindings(decisions: &Decisions, is_macos: bool) -> Vec<Binding> {
+    let import_quit = format!("import:{}", quit_chord(is_macos));
+    decisions
+        .choices
+        .iter()
+        .filter_map(|(id, decision)| {
+            if !id.starts_with("import:")
+                || decision.choice != DecisionChoice::Editor
+                || decision.key.is_none()
+            {
+                return None;
+            }
+            let command = decision
+                .command
+                .clone()
+                .or_else(|| (id == &import_quit).then(|| "tode.confirmQuit".into()))?;
+            Some(Binding {
+                key: decision.key.clone().unwrap(),
+                command,
+                when: Some("!terminalFocus".into()),
+            })
+        })
+        .collect()
+}
+
+pub fn quit_when(is_macos: bool) -> &'static str {
+    if is_macos {
+        "!terminalFocus && !editorHasSelection && (!inputFocus || editorTextFocus)"
+    } else {
+        "!terminalFocus"
+    }
+}
+
+pub fn hint_bindings(is_macos: bool) -> Vec<Binding> {
+    if is_macos {
+        Vec::new()
+    } else {
+        vec![Binding {
+            key: "ctrl+c".into(),
+            command: "tode.quitHint".into(),
+            when: Some(
+                "!terminalFocus && !editorHasSelection && (!inputFocus || editorTextFocus)".into(),
+            ),
+        }]
+    }
+}
+
+pub fn quit_bindings(decisions: Option<&Decisions>, is_macos: bool) -> Vec<Binding> {
+    let chord = quit_chord(is_macos);
+    let import = format!("import:{chord}");
+    let decision = decisions.and_then(|decisions| {
+        decisions
+            .choices
+            .get(&import)
+            .or_else(|| decisions.choices.get(chord))
+    });
+    if matches!(
+        decision.map(|decision| decision.choice),
+        Some(DecisionChoice::Editor | DecisionChoice::Keep)
+    ) {
+        return Vec::new();
+    }
+    vec![Binding {
+        key: chord.into(),
+        command: "tode.confirmQuit".into(),
+        when: Some(quit_when(is_macos).into()),
+    }]
+}
+
+pub fn fallback_bindings(decisions: Option<&Decisions>) -> Vec<Binding> {
+    let Some(decisions) = decisions else {
+        return Vec::new();
+    };
+    decisions
+        .choices
+        .iter()
+        .filter_map(|(id, decision)| {
+            if id.starts_with("claim:")
+                || id.starts_with("import:")
+                || decision.choice != DecisionChoice::Editor
+            {
+                return None;
+            }
+            Some(Binding {
+                key: decision.key.clone()?,
+                command: decision.command.clone()?,
+                when: Some("!terminalFocus".into()),
+            })
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -422,5 +581,114 @@ mod tests {
         let config = kitty_with_include("font_size 13");
         assert_eq!(config.matches(KITTY_INCLUDE_LINE).count(), 1);
         assert!(!kitty_without_include(&config).contains(KITTY_INCLUDE_LINE));
+    }
+
+    fn decision(choice: DecisionChoice) -> Decision {
+        Decision {
+            choice,
+            key: None,
+            action: None,
+            guard: None,
+            owner_terminal: false,
+            command: None,
+        }
+    }
+
+    #[test]
+    fn claimant_bindings_remove_original_and_move_when_requested() {
+        let mut choices = BTreeMap::new();
+        let mut moved = decision(DecisionChoice::Terminal);
+        moved.action = Some("extension.command".into());
+        moved.key = Some("ctrl+alt+k".into());
+        moved.guard = Some("editorTextFocus".into());
+        choices.insert("claim:cmd+k:extension.command".into(), moved);
+        let mut terminal_owned = decision(DecisionChoice::Terminal);
+        terminal_owned.action = Some("terminal.action".into());
+        terminal_owned.owner_terminal = true;
+        choices.insert("claim:cmd+t:terminal.action".into(), terminal_owned);
+        let bindings = claim_bindings(&Decisions {
+            version: 1,
+            terminal: "ghostty".into(),
+            choices,
+        });
+        assert_eq!(
+            bindings,
+            vec![
+                Binding {
+                    key: "cmd+k".into(),
+                    command: "-extension.command".into(),
+                    when: None,
+                },
+                Binding {
+                    key: "ctrl+alt+k".into(),
+                    command: "extension.command".into(),
+                    when: Some("editorTextFocus".into()),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn imported_and_fallback_editor_moves_keep_commands() {
+        let mut choices = BTreeMap::new();
+        let mut imported = decision(DecisionChoice::Editor);
+        imported.key = Some("cmd+alt+c".into());
+        choices.insert("import:ctrl+c".into(), imported);
+        let mut fallback = decision(DecisionChoice::Editor);
+        fallback.key = Some("ctrl+alt+f".into());
+        fallback.command = Some("workbench.action.find".into());
+        choices.insert("cmd+f".into(), fallback);
+        let decisions = Decisions {
+            version: 1,
+            terminal: "ghostty".into(),
+            choices,
+        };
+        assert_eq!(
+            override_bindings(&decisions, true)[0].command,
+            "tode.confirmQuit"
+        );
+        assert_eq!(
+            fallback_bindings(Some(&decisions))[0].command,
+            "workbench.action.find"
+        );
+    }
+
+    #[test]
+    fn quit_and_hint_bindings_follow_platform_and_decisions() {
+        assert_eq!(quit_chord(true), "ctrl+c");
+        assert_eq!(quit_chord(false), "ctrl+q");
+        assert!(hint_bindings(true).is_empty());
+        assert_eq!(hint_bindings(false)[0].key, "ctrl+c");
+        assert_eq!(
+            quit_bindings(None, true)[0].when.as_deref(),
+            Some("!terminalFocus && !editorHasSelection && (!inputFocus || editorTextFocus)")
+        );
+
+        let mut choices = BTreeMap::new();
+        choices.insert("ctrl+c".into(), decision(DecisionChoice::Keep));
+        let decisions = Decisions {
+            version: 1,
+            terminal: "ghostty".into(),
+            choices,
+        };
+        assert!(quit_bindings(Some(&decisions), true).is_empty());
+    }
+
+    #[test]
+    fn non_editor_or_namespaced_decisions_do_not_create_fallbacks() {
+        let mut choices = BTreeMap::new();
+        let mut claim = decision(DecisionChoice::Editor);
+        claim.key = Some("ctrl+x".into());
+        claim.command = Some("ignored".into());
+        choices.insert("claim:cmd+x".into(), claim);
+        choices.insert("cmd+y".into(), decision(DecisionChoice::Terminal));
+        assert!(
+            fallback_bindings(Some(&Decisions {
+                version: 1,
+                terminal: "kitty".into(),
+                choices,
+            }))
+            .is_empty()
+        );
     }
 }
