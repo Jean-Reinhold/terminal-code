@@ -19,7 +19,7 @@ sources:
 # Implemented
 
 * Root Cargo workspace pinned to Rust 1.98.0.
-* `tode-core` Rust library with target/goto parsing and newline-framed Unix IPC client behavior.
+* `tode-core` Rust library with target/goto, Unix IPC, OSC palette parsing/fallbacks, and source-preserving JSONC behavior.
 * `tode-runtime` Rust HTTP/1 injector with CSS/font handling, header rewriting, readiness hold, controlled errors, and upgraded-stream bridging.
 * `tode-harness` binary/library with `catalog check`, `schema`, `run`, and `replay` commands.
 * YAML-backed OKF catalog with 22 contract concepts, draft-aware executable coverage, reciprocal scenario links, risk/owner/surface/platform/source validation, and all 119 legacy test declarations mapped.
@@ -38,11 +38,11 @@ sources:
 
 # Verified Behavior
 
-* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 13 contract-mapped Rust tests.
+* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 22 contract-mapped Rust tests.
 * C01 help/version scenarios passed against the real legacy CLI in fresh sandboxes.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* Twenty-seven Rust workspace tests passed:
+* Thirty-six Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
   - IPC JSON-line framing and omitted optional fields;
@@ -63,7 +63,9 @@ sources:
   - timed-out Rust process groups are clean;
   - oversized Unix request is rejected;
   - missing Unix connection times out cleanly;
-  - seven injector tests cover all fourteen mapped legacy HTTP/WebSocket/CSS/font/readiness behaviors.
+  - seven injector tests cover all fourteen mapped legacy HTTP/WebSocket/CSS/font/readiness behaviors;
+  - four OSC palette parsing/fallback/query tests;
+  - five source-preserving JSONC parse/edit/idempotence tests.
 * `cargo fmt --all` and strict Clippy with `-D warnings` passed.
 
 # Current Trust Boundary
@@ -85,4 +87,4 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Next Slice
 
-Continue H3 by porting the C09-C11 palette/theme/JSONC corpus to Rust, then C13-C14 shortcut algorithms. Add a Rust product CLI target for C01 so help/version can leave the Node oracle.
+Continue H3 with full C10 Oklch/color/theme generation parity, then C13-C14 shortcut algorithms. Add a Rust product CLI target for C01 so help/version can leave the Node oracle.
