@@ -9,3 +9,4 @@
 * **Agent execution**: Routed eight harness planning workstreams to requested DeepSeek V4 Flash tasks; every worker failed in the Anthropic wrapper before the downstream model invocation, so no DeepSeek output was claimed.
 * **Implementation**: Added the first deterministic Rust harness vertical: executable C01/C02 catalog, six sandboxed legacy scenarios, exact/differential oracles, SHA-256 evidence, replay, containment/mismatch/corruption tests, and [implementation status](harness/implementation-status.md).
 * **H0 completion**: Decomposed C01-C22 into individual contract concepts, mapped all 119 legacy test declarations, replaced the CommonJS target probe with Rust `tode-core`/`tode-contract-probe`, and verified four C02 Rust scenarios against legacy-derived snapshots.
+* **H1 completion**: Added explicit sealed run plans, pre-side-effect policy limits, plan-bound evidence roots, plan-owned replay expectations, tamper detection, and fail-closed retry declarations.

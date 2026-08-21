@@ -141,6 +141,49 @@ fn replay_passes_then_rejects_corrupted_content_object() {
     assert!(replay(fixture.root.path(), &fixture.artifact_root, &outcome.run_id,).is_err());
 }
 
+#[test]
+fn replay_rejects_tampered_run_plan() {
+    let fixture = RunFixture::new();
+    fixture.write_target("left", "same\n");
+    fs::write(
+        fixture.root.path().join("baseline.json"),
+        r#"{"exit_code":0,"signal":null,"timed_out":false,"stdout":"same\n","stderr":""}"#,
+    )
+    .unwrap();
+    fixture.write_scenario(
+        r#"{"mode":"single","target":"left"}"#,
+        r#"[{"kind":"exact.snapshot","observation":"result","snapshot":"baseline.json"}]"#,
+    );
+
+    let outcome = run(&fixture.config(&["left"])).unwrap();
+    let plan = outcome.run_directory.join("plan.json");
+    let mut bytes = fs::read(&plan).unwrap();
+    bytes.push(b' ');
+    fs::write(plan, bytes).unwrap();
+    let error = replay(fixture.root.path(), &fixture.artifact_root, &outcome.run_id)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("plan.json expected digest"), "{error}");
+}
+
+#[test]
+fn policy_rejects_before_artifact_or_sandbox_creation() {
+    let fixture = RunFixture::new();
+    fixture.write_target("left", "same\n");
+    let scenario = valid_scenario(
+        r#"{"mode":"single","target":"left"}"#,
+        process_steps(),
+        r#"[{"kind":"exact.snapshot","observation":"result","snapshot":"baseline.json"}]"#,
+        None,
+    )
+    .replacen(r#""timeout_ms":2000"#, r#""timeout_ms":60001"#, 1);
+    fs::write(&fixture.scenario, scenario).unwrap();
+
+    let error = run(&fixture.config(&["left"])).unwrap_err().to_string();
+    assert!(error.contains("policy maximum"), "{error}");
+    assert!(!fixture.artifact_root.exists());
+}
+
 struct RunFixture {
     root: TempDir,
     scenario: PathBuf,

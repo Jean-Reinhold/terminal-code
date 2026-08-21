@@ -62,12 +62,97 @@ struct RunManifest {
     run_key: String,
     scenario_id: String,
     scenario_sha256: String,
+    plan_sha256: String,
     targets: Vec<TargetIdentity>,
     observations_sha256: String,
     assertions_sha256: String,
     events_sha256: String,
     evidence_root: String,
     verdict: Verdict,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct RunPolicy {
+    max_targets: usize,
+    max_steps: usize,
+    max_observations: usize,
+    max_assertions: usize,
+    max_run_timeout_ms: u64,
+    max_step_timeout_ms: u64,
+}
+
+impl Default for RunPolicy {
+    fn default() -> Self {
+        Self {
+            max_targets: 2,
+            max_steps: 16,
+            max_observations: 32,
+            max_assertions: 32,
+            max_run_timeout_ms: 60_000,
+            max_step_timeout_ms: 30_000,
+        }
+    }
+}
+
+impl RunPolicy {
+    fn validate(&self, scenario: &Scenario) -> Result<()> {
+        let targets = scenario.targets.ids().len();
+        if targets == 0 || targets > self.max_targets {
+            return Err(HarnessError::Invalid(format!(
+                "scenario {} has {targets} targets; policy maximum is {}",
+                scenario.id, self.max_targets
+            )));
+        }
+        for (name, actual, maximum) in [
+            ("steps", scenario.steps.len(), self.max_steps),
+            (
+                "observations",
+                scenario.observations.len(),
+                self.max_observations,
+            ),
+            ("assertions", scenario.assertions.len(), self.max_assertions),
+        ] {
+            if actual > maximum {
+                return Err(HarnessError::Invalid(format!(
+                    "scenario {} has {actual} {name}; policy maximum is {maximum}",
+                    scenario.id
+                )));
+            }
+        }
+        if scenario.requires.timeout_ms > self.max_run_timeout_ms {
+            return Err(HarnessError::Invalid(format!(
+                "scenario {} timeout {}ms exceeds policy maximum {}ms",
+                scenario.id, scenario.requires.timeout_ms, self.max_run_timeout_ms
+            )));
+        }
+        for step in &scenario.steps {
+            let Step::ProcessExec { timeout_ms, id, .. } = step;
+            if *timeout_ms > self.max_step_timeout_ms {
+                return Err(HarnessError::Invalid(format!(
+                    "scenario {} step {id} timeout {timeout_ms}ms exceeds policy maximum {}ms",
+                    scenario.id, self.max_step_timeout_ms
+                )));
+            }
+        }
+        if scenario.retry.is_some() {
+            return Err(HarnessError::Invalid(format!(
+                "scenario {} declares retry, which execution policy v1 does not implement",
+                scenario.id
+            )));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct RunPlan {
+    schema_version: u32,
+    run_key: String,
+    scenario_id: String,
+    scenario: ArtifactRef,
+    targets: Vec<TargetIdentity>,
+    expectations: Vec<Option<ArtifactRef>>,
+    policy: RunPolicy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -179,6 +264,8 @@ pub fn run(config: &RunConfig) -> Result<RunOutcome> {
         )
     })?;
     let scenario = load_scenario(&config.scenario_path)?;
+    let policy = RunPolicy::default();
+    policy.validate(&scenario)?;
     validate_current_os(&scenario)?;
     let manifests = load_manifests(&config.target_manifest_paths)?;
     let store = ArtifactStore::new(&config.artifact_root)?;
@@ -212,11 +299,22 @@ pub fn run(config: &RunConfig) -> Result<RunOutcome> {
     }
 
     let assertion_expectations = prepare_expectations(&scenario, &repo_root, &store)?;
+    let target_identities: Vec<_> = identities.values().cloned().collect();
     let run_key = calculate_run_key(
         &scenario_bytes,
-        identities.values(),
+        target_identities.iter(),
         assertion_expectations.iter().flatten(),
+        &policy,
     );
+    let plan = RunPlan {
+        schema_version: 1,
+        run_key: run_key.clone(),
+        scenario_id: scenario.id.clone(),
+        scenario: scenario_ref.clone(),
+        targets: target_identities.clone(),
+        expectations: assertion_expectations,
+        policy,
+    };
     let run_id = format!(
         "{}-{}-{}",
         now_unix_ms()?,
@@ -230,13 +328,13 @@ pub fn run(config: &RunConfig) -> Result<RunOutcome> {
             error,
         )
     })?;
+    write_json_atomic(&run_directory.join("plan.json"), &plan)?;
+    let plan_sha256 = sha256_file(&run_directory.join("plan.json"))?;
     write_json_atomic(&run_directory.join("scenario.json"), &scenario)?;
-    write_json_atomic(
-        &run_directory.join("targets.json"),
-        &identities.values().cloned().collect::<Vec<_>>(),
-    )?;
+    write_json_atomic(&run_directory.join("targets.json"), &target_identities)?;
     let mut events = EventLog::new(run_directory.join("events.jsonl"))?;
     events.append("created", format!("scenario {}", scenario.id))?;
+    events.append("plan_compiled", format!("plan {plan_sha256}"))?;
 
     let mut observations = Vec::new();
     for target_id in scenario.targets.ids() {
@@ -272,7 +370,7 @@ pub fn run(config: &RunConfig) -> Result<RunOutcome> {
 
     events.append("comparing", "evaluate assertions")?;
     let assertion_records =
-        evaluate_assertions(&scenario, &observations, &assertion_expectations, &store)?;
+        evaluate_assertions(&scenario, &observations, &plan.expectations, &store)?;
     let verdict = if assertion_records.iter().all(|record| record.passed) {
         Verdict::Passed
     } else {
@@ -285,9 +383,9 @@ pub fn run(config: &RunConfig) -> Result<RunOutcome> {
     let observations_sha256 = sha256_file(&run_directory.join("observations.json"))?;
     let assertions_sha256 = sha256_file(&run_directory.join("assertions.json"))?;
     let events_sha256 = sha256_file(&run_directory.join("events.jsonl"))?;
-    let target_identities: Vec<_> = identities.into_values().collect();
     let evidence_root = calculate_evidence_root(
         &scenario_ref.sha256,
+        &plan_sha256,
         &target_identities,
         &observations_sha256,
         &assertions_sha256,
@@ -299,6 +397,7 @@ pub fn run(config: &RunConfig) -> Result<RunOutcome> {
         run_key: run_key.clone(),
         scenario_id: scenario.id.clone(),
         scenario_sha256: scenario_ref.sha256,
+        plan_sha256,
         targets: target_identities,
         observations_sha256,
         assertions_sha256,
@@ -329,12 +428,41 @@ pub fn replay(repo_root: &Path, artifact_root: &Path, run_id: &str) -> Result<Re
             "run manifest identity/version mismatch".into(),
         ));
     }
+    verify_digest(&run_directory.join("plan.json"), &manifest.plan_sha256)?;
+    let plan: RunPlan = read_json(&run_directory.join("plan.json"))?;
+    if plan.schema_version != 1
+        || plan.run_key != manifest.run_key
+        || plan.scenario_id != manifest.scenario_id
+        || plan.scenario.sha256 != manifest.scenario_sha256
+        || plan.targets != manifest.targets
+    {
+        return Err(HarnessError::Integrity(
+            "run plan and manifest identity mismatch".into(),
+        ));
+    }
     let scenario: Scenario = read_json(&run_directory.join("scenario.json"))?;
     let scenario_bytes = canonical_scenario(&scenario)?;
     let scenario_digest = hex::encode(Sha256::digest(&scenario_bytes));
     if scenario_digest != manifest.scenario_sha256 {
         return Err(HarnessError::Integrity(
             "stored scenario digest mismatch".into(),
+        ));
+    }
+    if store.get(&plan.scenario)? != scenario_bytes {
+        return Err(HarnessError::Integrity(
+            "scenario artifact differs from stored scenario".into(),
+        ));
+    }
+    plan.policy.validate(&scenario)?;
+    let replayed_run_key = calculate_run_key(
+        &scenario_bytes,
+        plan.targets.iter(),
+        plan.expectations.iter().flatten(),
+        &plan.policy,
+    );
+    if replayed_run_key != plan.run_key {
+        return Err(HarnessError::Integrity(
+            "recomputed run key differs from plan".into(),
         ));
     }
     verify_digest(
@@ -348,6 +476,7 @@ pub fn replay(repo_root: &Path, artifact_root: &Path, run_id: &str) -> Result<Re
     verify_digest(&run_directory.join("events.jsonl"), &manifest.events_sha256)?;
     let evidence_root = calculate_evidence_root(
         &manifest.scenario_sha256,
+        &manifest.plan_sha256,
         &manifest.targets,
         &manifest.observations_sha256,
         &manifest.assertions_sha256,
@@ -370,11 +499,10 @@ pub fn replay(repo_root: &Path, artifact_root: &Path, run_id: &str) -> Result<Re
             store.get(reference)?;
         }
     }
-    let expectations: Vec<_> = stored_assertions
-        .iter()
-        .map(|record| record.expected.clone())
-        .collect();
-    let replayed = evaluate_assertions(&scenario, &observations, &expectations, &store)?;
+    for expected in plan.expectations.iter().flatten() {
+        store.get(expected)?;
+    }
+    let replayed = evaluate_assertions(&scenario, &observations, &plan.expectations, &store)?;
     if replayed != stored_assertions {
         return Err(HarnessError::Integrity(
             "replayed assertion records differ from sealed records".into(),
@@ -707,6 +835,7 @@ fn calculate_run_key<'a>(
     scenario: &[u8],
     identities: impl Iterator<Item = &'a TargetIdentity>,
     expectations: impl Iterator<Item = &'a ArtifactRef>,
+    policy: &RunPolicy,
 ) -> String {
     let mut hasher = Sha256::new();
     hasher.update(scenario);
@@ -719,11 +848,22 @@ fn calculate_run_key<'a>(
     for expected in expectations {
         hasher.update(expected.sha256.as_bytes());
     }
+    for value in [
+        policy.max_targets as u64,
+        policy.max_steps as u64,
+        policy.max_observations as u64,
+        policy.max_assertions as u64,
+        policy.max_run_timeout_ms,
+        policy.max_step_timeout_ms,
+    ] {
+        hasher.update(value.to_le_bytes());
+    }
     hex::encode(hasher.finalize())
 }
 
 fn calculate_evidence_root(
     scenario_sha256: &str,
+    plan_sha256: &str,
     targets: &[TargetIdentity],
     observations_sha256: &str,
     assertions_sha256: &str,
@@ -731,6 +871,7 @@ fn calculate_evidence_root(
 ) -> String {
     let mut hasher = Sha256::new();
     hasher.update(scenario_sha256.as_bytes());
+    hasher.update(plan_sha256.as_bytes());
     for target in targets {
         hasher.update(target.target_id.as_bytes());
         hasher.update(target.program_id.as_bytes());

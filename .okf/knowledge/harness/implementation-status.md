@@ -27,7 +27,7 @@ sources:
 * S1 unique sandbox with HOME/XDG/install roots, protected environment, safe relative paths, fixture copy, symlink rejection, and process-group teardown.
 * `process.exec` and `process.result` adapter path with timeout, raw stdout/stderr, exit/signal, and sandbox-root normalization.
 * Exact process snapshots and differential process equality.
-* Atomic SHA-256 object store, append-only event log, scenario/target/observation/assertion digests, evidence root, sealed run manifest, and offline replay.
+* Explicit sealed `plan.json` with serialized policy, target identities, scenario/baseline artifacts, deterministic run key, manifest plan digest, append-only event log, evidence root, and offline replay.
 * C01-C22 individual OKF compatibility concepts.
 * Six characterization scenarios: two legacy C01 CLI scenarios and four Rust C02 target/goto scenarios.
 * Rust `tode-contract-probe` binary that serializes `tode-core` results without duplicating product logic.
@@ -38,7 +38,7 @@ sources:
 * C01 help/version scenarios passed against the real legacy CLI in fresh sandboxes.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* Seven Rust workspace tests passed:
+* Nine Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
   - committed catalog/schema agreement;
@@ -46,6 +46,8 @@ sources:
   - protected HOME override and fixture-symlink rejection;
   - deliberate differential stdout mismatch returns `Failed`;
   - exact pass replays, then corrupted content object makes replay fail.
+  - tampered sealed plan makes replay fail;
+  - oversized scenario policy fails before artifact/sandbox creation.
 * `cargo fmt --all` and strict Clippy with `-D warnings` passed.
 
 # Current Trust Boundary
@@ -53,6 +55,8 @@ sources:
 The implemented deterministic core does not depend on any model SDK. There is no `tode-harness-agent` crate yet. This is intentional: agent proposals cannot precede a trustworthy schema, execution, artifact, oracle, and replay path.
 
 Network policy in scenario v1 is only `not-required`. The S1 runner does not claim hard network denial or loopback isolation on macOS. Those modes remain unavailable until an S2 worker/adapter can attest enforcement.
+
+Execution policy v1 rejects declared retries rather than ignoring them. Classified retry/resumption remains H6 work.
 
 # Not Implemented Yet
 
@@ -65,4 +69,4 @@ Network policy in scenario v1 is only `not-required`. The S1 runner does not cla
 
 # Next Slice
 
-Complete H1 by making the compiled run plan an explicit sealed artifact, enforcing run/scenario policy before side effects, and strengthening replay/crash-state coverage. In parallel, add a Rust product CLI target for C01 so help/version can leave the Node oracle.
+Complete H2 with filesystem-tree and Unix-socket adapters, held port/socket leases, output/resource budgets, descendant leak evidence, and fault/cleanup tests. Add a Rust product CLI target for C01 in parallel so help/version can leave the Node oracle.
