@@ -16,3 +16,4 @@
 * **Video cleanup**: Removed stale dark/light demo media and the custom client player, browser-verified the cleaned homepage, and added a deferred [certified replacement-video plan](plans/replacement-demo-video.md).
 * **H3 C08 parity**: Added the Rust HTTP/1 injector with HTML/CSS/font/header/readiness/error behavior and raw WebSocket upgrade bridging; 7 Rust tests cover all 14 legacy injector cases.
 * **H3 C09/C11 parity**: Ported OSC palette parsing/fallbacks and source-preserving JSONC editing/parsing to Rust; 9 new tests raise mapped Rust contract coverage to 22.
+* **H3 C10 parity**: Ported complete sRGB/Oklch color math and the full workbench/token theme generator to Rust; 10 tests raise mapped Rust contract coverage to 32.
