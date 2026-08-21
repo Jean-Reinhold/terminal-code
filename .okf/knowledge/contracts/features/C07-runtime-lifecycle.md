@@ -5,7 +5,7 @@ contract_id: C07
 description: Preserve pinned artifact resolution, verification, readiness, warm-up, state, and shutdown.
 tags: [runtime, code-server, terminal-browser, lifecycle]
 status: draft
-implementation_status: rust-existing-runtime-partial
+implementation_status: rust-runtime-resolution-partial
 risk: critical
 owners: [runtime]
 surfaces: [process, filesystem, http, download]
@@ -31,4 +31,4 @@ Prefer verified vendored/offline artifacts, preserve target triples and platform
 
 # Coverage Status
 
-Eighteen Rust tests cover verified artifacts, existing-source precedence, platform Electron layout, launcher environment/mode, safe system clone, state/PID/readiness, exact code-server spawn, composed daemon, warm-up, and shutdown. C07 remains draft until release lookup/download is composed with this resolver and a persistent daemon command owns the live runtime.
+Nineteen Rust tests cover streamed verified artifacts, override/vendored/pinned/system/downloaded precedence, strip-one extraction, platform Electron layout, launcher/browser homes, state/PID/readiness, exact code-server spawn, composed daemon, warm-up, and shutdown. C07 remains draft until the persistent daemon command and production launch orchestration own the live runtime.

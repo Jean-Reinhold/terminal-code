@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::{Read, Write};
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 
 use flate2::read::GzDecoder;
 use reqwest::Client;
@@ -87,11 +87,27 @@ pub fn unpack_tar_gz(
     max_entries: usize,
     max_bytes: u64,
 ) -> Result<(), ArtifactError> {
+    unpack_tar_gz_stripped(archive_path, destination, 0, max_entries, max_bytes)
+}
+
+pub fn unpack_tar_gz_stripped(
+    archive_path: &Path,
+    destination: &Path,
+    strip_components: usize,
+    max_entries: usize,
+    max_bytes: u64,
+) -> Result<(), ArtifactError> {
     if destination.exists() {
         fs::remove_dir_all(destination)?;
     }
     fs::create_dir_all(destination)?;
-    let result = unpack_inner(archive_path, destination, max_entries, max_bytes);
+    let result = unpack_inner(
+        archive_path,
+        destination,
+        strip_components,
+        max_entries,
+        max_bytes,
+    );
     if result.is_err() {
         let _ = fs::remove_dir_all(destination);
     }
@@ -128,6 +144,7 @@ pub fn swap_directory(staged: &Path, live: &Path) -> Result<(), ArtifactError> {
 fn unpack_inner(
     archive_path: &Path,
     destination: &Path,
+    strip_components: usize,
     max_entries: usize,
     max_bytes: u64,
 ) -> Result<(), ArtifactError> {
@@ -151,6 +168,10 @@ fn unpack_inner(
                 .any(|component| !matches!(component, Component::Normal(_)))
         {
             return Err(ArtifactError::UnsafeArchive(path.display().to_string()));
+        }
+        let path: PathBuf = path.components().skip(strip_components).collect();
+        if path.as_os_str().is_empty() {
+            continue;
         }
         let entry_type = entry.header().entry_type();
         if !(entry_type.is_dir() || entry_type.is_file()) {

@@ -1,7 +1,11 @@
+use reqwest::Client;
+use serde::Deserialize;
 use std::fs;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+
+use crate::{download_verified, unpack_tar_gz_stripped};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeSource {
@@ -34,6 +38,28 @@ pub struct RuntimeRoots {
     pub vendored: PathBuf,
     pub system_install: PathBuf,
     pub homes: BrowserHomes,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct BrowserRelease {
+    version: String,
+    url: String,
+    sha256: String,
+    size: u64,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum BrowserResolveError {
+    #[error("{0}")]
+    Existing(String),
+    #[error("read terminal-browser release: {0}")]
+    Release(#[from] reqwest::Error),
+    #[error(transparent)]
+    Artifact(#[from] crate::ArtifactError),
+    #[error("resolved terminal-browser is missing pieces: {0}")]
+    MissingPieces(String),
+    #[error("write terminal-browser launcher: {0}")]
+    Launcher(std::io::Error),
 }
 
 pub fn electron_entry(root: &Path, is_macos: bool) -> PathBuf {
@@ -113,6 +139,62 @@ pub fn resolve_existing(
         )?));
     }
     Ok(None)
+}
+
+pub async fn resolve_runtime(
+    client: &Client,
+    roots: &RuntimeRoots,
+    version: &str,
+    pinned_version: &str,
+    override_bin: Option<&Path>,
+    is_macos: bool,
+    release_origin: &str,
+) -> Result<BrowserRuntime, BrowserResolveError> {
+    if let Some(runtime) = resolve_existing(roots, version, pinned_version, override_bin, is_macos)
+        .map_err(BrowserResolveError::Existing)?
+    {
+        return Ok(runtime);
+    }
+    let release: BrowserRelease = client
+        .get(format!(
+            "{}/v/{version}",
+            release_origin.trim_end_matches('/')
+        ))
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+    if release.version != version {
+        return Err(BrowserResolveError::MissingPieces(format!(
+            "release returned version {} for {version}",
+            release.version
+        )));
+    }
+    let tarball = roots.runtime.join(format!("{version}.tar.gz"));
+    download_verified(
+        client,
+        &release.url,
+        &release.sha256,
+        release.size,
+        &tarball,
+    )
+    .await?;
+    let root = roots.runtime.join("terminal-browser").join(version);
+    let unpacked = unpack_tar_gz_stripped(&tarball, &root, 1, 200_000, 2 * 1024 * 1024 * 1024);
+    let _ = fs::remove_file(&tarball);
+    unpacked?;
+    if !usable(&root, version, is_macos) {
+        return Err(BrowserResolveError::MissingPieces(version.into()));
+    }
+    let bin =
+        write_launcher(&root, &roots.homes, is_macos).map_err(BrowserResolveError::Launcher)?;
+    Ok(BrowserRuntime {
+        bin,
+        root,
+        version: version.into(),
+        source: RuntimeSource::Downloaded,
+    })
 }
 
 pub fn write_launcher(
@@ -204,7 +286,12 @@ fn shell_quote(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
+    use flate2::Compression;
+    use flate2::write::GzEncoder;
+    use sha2::{Digest, Sha256};
     use tempfile::TempDir;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
 
     use super::*;
 
@@ -304,5 +391,74 @@ mod tests {
             fs::metadata(launcher).unwrap().permissions().mode() & 0o777,
             0o755
         );
+    }
+
+    #[tokio::test]
+    async fn downloads_verifies_unpacks_and_launches_missing_runtime() {
+        let root = TempDir::new().unwrap();
+        let roots = roots(&root);
+        let archive = runtime_archive("v4");
+        let digest = hex::encode(Sha256::digest(&archive));
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let release = serde_json::to_vec(&serde_json::json!({
+            "version": "v4",
+            "channel": "stable",
+            "url": format!("http://{address}/artifact"),
+            "sha256": digest,
+            "size": archive.len()
+        }))
+        .unwrap();
+        let server = tokio::spawn(async move {
+            for body in [release, archive] {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut request = [0_u8; 2048];
+                let _ = stream.read(&mut request).await.unwrap();
+                stream
+                    .write_all(
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        )
+                        .as_bytes(),
+                    )
+                    .await
+                    .unwrap();
+                stream.write_all(&body).await.unwrap();
+            }
+        });
+        let runtime = resolve_runtime(
+            &Client::new(),
+            &roots,
+            "v4",
+            "v1",
+            None,
+            false,
+            &format!("http://{address}"),
+        )
+        .await
+        .unwrap();
+        server.await.unwrap();
+        assert_eq!(runtime.source, RuntimeSource::Downloaded);
+        assert!(usable(&runtime.root, "v4", false));
+        assert!(runtime.bin.is_file());
+        assert!(!roots.runtime.join("v4.tar.gz").exists());
+    }
+
+    fn runtime_archive(version: &str) -> Vec<u8> {
+        let encoder = GzEncoder::new(Vec::new(), Compression::default());
+        let mut archive = tar::Builder::new(encoder);
+        for (path, contents, mode) in [
+            ("bundle/VERSION", version.as_bytes(), 0o644),
+            ("bundle/cli/dist/main.js", b"main".as_slice(), 0o644),
+            ("bundle/electron/electron", b"electron".as_slice(), 0o755),
+        ] {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(contents.len() as u64);
+            header.set_mode(mode);
+            header.set_cksum();
+            archive.append_data(&mut header, path, contents).unwrap();
+        }
+        archive.into_inner().unwrap().finish().unwrap()
     }
 }

@@ -4,10 +4,13 @@ pub mod daemon;
 pub mod injector;
 pub mod process;
 
-pub use artifact::{ArtifactError, download_verified, sha256_file, swap_directory, unpack_tar_gz};
+pub use artifact::{
+    ArtifactError, download_verified, sha256_file, swap_directory, unpack_tar_gz,
+    unpack_tar_gz_stripped,
+};
 pub use browser::{
-    BrowserHomes, BrowserRuntime, RuntimeRoots, RuntimeSource, electron_entry, resolve_existing,
-    usable, version_at, write_launcher,
+    BrowserHomes, BrowserResolveError, BrowserRuntime, RuntimeRoots, RuntimeSource, electron_entry,
+    resolve_existing, resolve_runtime, usable, version_at, write_launcher,
 };
 pub use daemon::{Daemon, DaemonConfig, DaemonError};
 pub use injector::{FONT_ROUTE, Injector, InjectorConfig, injected_css};
