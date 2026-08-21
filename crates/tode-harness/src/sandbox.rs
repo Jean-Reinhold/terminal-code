@@ -1,10 +1,13 @@
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Component, Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
 use tempfile::TempDir;
 
+use crate::artifact::{ArtifactRef, ArtifactStore};
 use crate::error::{HarnessError, Result};
 use crate::scenario::{EnvironmentValue, ScenarioValue};
 
@@ -18,6 +21,19 @@ const PROTECTED_ENV: &[&str] = &[
     "TODE_INSTALL_ROOT",
 ];
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct FilesystemSnapshot {
+    schema_version: u32,
+    entries: Vec<FilesystemEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct FilesystemEntry {
+    path: String,
+    kind: String,
+    mode: u32,
+    content: Option<ArtifactRef>,
+}
 #[derive(Debug)]
 pub struct Sandbox {
     directory: TempDir,
@@ -139,6 +155,77 @@ impl Sandbox {
     pub fn log_path(&self, name: &str) -> Result<PathBuf> {
         validate_relative_components(name)?;
         Ok(self.root.join("logs").join(name))
+    }
+
+    pub fn snapshot_tree(&self, store: &ArtifactStore) -> Result<ArtifactRef> {
+        let mut entries = Vec::new();
+        let walker = walkdir::WalkDir::new(&self.root)
+            .follow_links(false)
+            .into_iter()
+            .filter_entry(|entry| {
+                entry.path() == self.root
+                    || entry
+                        .path()
+                        .strip_prefix(&self.root)
+                        .ok()
+                        .and_then(|relative| relative.components().next())
+                        .is_none_or(|component| component.as_os_str() != "logs")
+            });
+        for entry in walker {
+            let entry = entry.map_err(|error| HarnessError::Invalid(error.to_string()))?;
+            let relative = entry
+                .path()
+                .strip_prefix(&self.root)
+                .map_err(|error| HarnessError::Invalid(error.to_string()))?;
+            if relative.as_os_str().is_empty() {
+                continue;
+            }
+            if entry.file_type().is_symlink() {
+                return Err(HarnessError::Invalid(format!(
+                    "sandbox snapshot rejects symlink: {}",
+                    entry.path().display()
+                )));
+            }
+            let metadata = fs::metadata(entry.path()).map_err(|error| {
+                HarnessError::io(
+                    format!("read snapshot metadata {}", entry.path().display()),
+                    error,
+                )
+            })?;
+            let (kind, content) = if entry.file_type().is_dir() {
+                ("directory".to_owned(), None)
+            } else if entry.file_type().is_file() {
+                let bytes = fs::read(entry.path()).map_err(|error| {
+                    HarnessError::io(
+                        format!("read snapshot file {}", entry.path().display()),
+                        error,
+                    )
+                })?;
+                (
+                    "file".to_owned(),
+                    Some(store.put(&bytes, "application/octet-stream")?),
+                )
+            } else {
+                return Err(HarnessError::Invalid(format!(
+                    "unsupported sandbox snapshot entry: {}",
+                    entry.path().display()
+                )));
+            };
+            entries.push(FilesystemEntry {
+                path: relative.to_string_lossy().replace('\\', "/"),
+                kind,
+                mode: metadata.permissions().mode() & 0o7777,
+                content,
+            });
+        }
+        entries.sort_by(|left, right| left.path.cmp(&right.path));
+        let snapshot = FilesystemSnapshot {
+            schema_version: 1,
+            entries,
+        };
+        let bytes =
+            serde_json::to_vec(&snapshot).map_err(|error| HarnessError::Json(error.to_string()))?;
+        store.put(&bytes, "application/json")
     }
 
     fn copy_fixture(&self, repo_root: &Path, fixture: &str) -> Result<()> {

@@ -7,6 +7,7 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use nix::errno::Errno;
 use nix::sys::signal::{Signal, killpg};
 use nix::unistd::Pid;
 use serde::{Deserialize, Serialize};
@@ -79,6 +80,7 @@ struct RunPolicy {
     max_assertions: usize,
     max_run_timeout_ms: u64,
     max_step_timeout_ms: u64,
+    max_output_bytes: u64,
 }
 
 impl Default for RunPolicy {
@@ -90,6 +92,7 @@ impl Default for RunPolicy {
             max_assertions: 32,
             max_run_timeout_ms: 60_000,
             max_step_timeout_ms: 30_000,
+            max_output_bytes: 1_048_576,
         }
     }
 }
@@ -172,6 +175,8 @@ struct ProcessObservation {
     stderr_raw: ArtifactRef,
     stdout_normalized: ArtifactRef,
     stderr_normalized: ArtifactRef,
+    sandbox_tree: ArtifactRef,
+    process_group_clean: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -348,7 +353,13 @@ pub fn run(config: &RunConfig) -> Result<RunOutcome> {
             let resolved_program = resolved
                 .get(&(target_id.to_owned(), program.target.clone()))
                 .expect("resolved program exists");
-            let result = execute_process(step, resolved_program, &sandbox, &environment)?;
+            let result = execute_process(
+                step,
+                resolved_program,
+                &sandbox,
+                &environment,
+                plan.policy.max_output_bytes,
+            )?;
             step_results.insert(id.clone(), result);
         }
         events.append("observing", format!("target {target_id}"))?;
@@ -495,6 +506,7 @@ pub fn replay(repo_root: &Path, artifact_root: &Path, run_id: &str) -> Result<Re
             &observation.process.stderr_raw,
             &observation.process.stdout_normalized,
             &observation.process.stderr_normalized,
+            &observation.process.sandbox_tree,
         ] {
             store.get(reference)?;
         }
@@ -532,6 +544,7 @@ struct ProcessResult {
     timed_out: bool,
     stdout: Vec<u8>,
     stderr: Vec<u8>,
+    process_group_clean: bool,
 }
 
 fn execute_process(
@@ -539,6 +552,7 @@ fn execute_process(
     program: &ResolvedProgram,
     sandbox: &Sandbox,
     environment: &BTreeMap<String, String>,
+    max_output_bytes: u64,
 ) -> Result<ProcessResult> {
     let Step::ProcessExec {
         id,
@@ -580,15 +594,27 @@ fn execute_process(
     let (status, timed_out) = match waited {
         Some(status) => (status, false),
         None => {
-            terminate_process_group(pid);
+            signal_process_group(pid);
             let status = child
                 .wait()
                 .map_err(|error| HarnessError::io("wait after target timeout", error))?;
             (status, true)
         }
     };
-    terminate_process_group(pid);
+    let process_group_clean = terminate_process_group(pid);
 
+    let stdout_bytes = fs::metadata(&stdout_path)
+        .map_err(|error| HarnessError::io(format!("stat {}", stdout_path.display()), error))?
+        .len();
+    let stderr_bytes = fs::metadata(&stderr_path)
+        .map_err(|error| HarnessError::io(format!("stat {}", stderr_path.display()), error))?
+        .len();
+    if stdout_bytes.saturating_add(stderr_bytes) > max_output_bytes {
+        return Err(HarnessError::Invalid(format!(
+            "process output {} bytes exceeds policy maximum {max_output_bytes} bytes",
+            stdout_bytes.saturating_add(stderr_bytes)
+        )));
+    }
     let stdout = fs::read(&stdout_path)
         .map_err(|error| HarnessError::io(format!("read {}", stdout_path.display()), error))?;
     let stderr = fs::read(&stderr_path)
@@ -599,14 +625,27 @@ fn execute_process(
         timed_out,
         stdout,
         stderr,
+        process_group_clean,
     })
 }
 
-fn terminate_process_group(pid: i32) {
+fn signal_process_group(pid: i32) {
     let group = Pid::from_raw(pid);
     let _ = killpg(group, Signal::SIGTERM);
     thread::sleep(Duration::from_millis(20));
     let _ = killpg(group, Signal::SIGKILL);
+}
+
+fn terminate_process_group(pid: i32) -> bool {
+    signal_process_group(pid);
+    let group = Pid::from_raw(pid);
+    for _ in 0..10 {
+        match killpg(group, None) {
+            Err(Errno::ESRCH) => return true,
+            _ => thread::sleep(Duration::from_millis(10)),
+        }
+    }
+    false
 }
 
 fn seal_process_observation(
@@ -636,6 +675,7 @@ fn seal_process_observation(
     } else {
         (stdout_raw.clone(), stderr_raw.clone())
     };
+    let sandbox_tree = sandbox.snapshot_tree(store)?;
     Ok(ObservationRecord {
         target_id: target_id.to_owned(),
         observation_id: observation_id.to_owned(),
@@ -647,6 +687,8 @@ fn seal_process_observation(
             stderr_raw,
             stdout_normalized,
             stderr_normalized,
+            sandbox_tree,
+            process_group_clean: result.process_group_clean,
         },
     })
 }
@@ -772,6 +814,14 @@ fn evaluate_assertions(
                 {
                     differences.push("stderr differs".to_owned());
                 }
+                if store.get(&left.process.sandbox_tree)?
+                    != store.get(&right.process.sandbox_tree)?
+                {
+                    differences.push("filesystem tree differs".to_owned());
+                }
+                if left.process.process_group_clean != right.process.process_group_clean {
+                    differences.push("process-group cleanup differs".to_owned());
+                }
                 records.push(AssertionRecord {
                     kind: "differential.equal".into(),
                     observation_id: observation.clone(),
@@ -785,6 +835,19 @@ fn evaluate_assertions(
                 });
             }
         }
+    }
+    for observation in observations {
+        records.push(AssertionRecord {
+            kind: "invariant.process-group-clean".into(),
+            observation_id: observation.observation_id.clone(),
+            expected: None,
+            passed: observation.process.process_group_clean,
+            message: if observation.process.process_group_clean {
+                format!("target {} process group is clean", observation.target_id)
+            } else {
+                format!("target {} leaked its process group", observation.target_id)
+            },
+        });
     }
     Ok(records)
 }
@@ -855,6 +918,7 @@ fn calculate_run_key<'a>(
         policy.max_assertions as u64,
         policy.max_run_timeout_ms,
         policy.max_step_timeout_ms,
+        policy.max_output_bytes,
     ] {
         hasher.update(value.to_le_bytes());
     }

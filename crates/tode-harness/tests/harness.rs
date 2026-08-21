@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 use tempfile::TempDir;
-use tode_harness::artifact::ArtifactStore;
+use tode_harness::artifact::{ArtifactRef, ArtifactStore};
 use tode_harness::catalog::check_catalog;
 use tode_harness::runner::{RunConfig, Verdict, replay, run};
 use tode_harness::sandbox::Sandbox;
@@ -89,6 +89,69 @@ fn sandbox_rejects_protected_environment_and_fixture_symlinks() {
     let mut environment = BTreeMap::new();
     environment.insert("HOME".to_owned(), EnvironmentValue::Literal("/tmp".into()));
     assert!(sandbox.environment(&environment).is_err());
+}
+
+#[test]
+fn sandbox_snapshot_records_content_and_excludes_logs() {
+    let repo = TempDir::new().unwrap();
+    let sandbox = Sandbox::create(repo.path(), None).unwrap();
+    fs::write(sandbox.path("workspace/seen.txt").unwrap(), "seen").unwrap();
+    fs::write(sandbox.log_path("ignored.log").unwrap(), "ignored").unwrap();
+    let artifacts = TempDir::new().unwrap();
+    let store = ArtifactStore::new(artifacts.path()).unwrap();
+    let snapshot = sandbox.snapshot_tree(&store).unwrap();
+    let value: Value = serde_json::from_slice(&store.get(&snapshot).unwrap()).unwrap();
+    let entries = value["entries"].as_array().unwrap();
+    assert!(
+        entries
+            .iter()
+            .all(|entry| !entry["path"].as_str().unwrap().starts_with("logs"))
+    );
+    let seen = entries
+        .iter()
+        .find(|entry| entry["path"] == "workspace/seen.txt")
+        .unwrap();
+    let content: ArtifactRef = serde_json::from_value(seen["content"].clone()).unwrap();
+    assert_eq!(store.get(&content).unwrap(), b"seen");
+}
+
+#[test]
+fn output_budget_fails_closed() {
+    let fixture = RunFixture::new();
+    fixture.write_rust_probe_target("left");
+    fixture.write_rust_probe_target("right");
+    fixture.write_scenario_with_steps(
+        r#"{"mode":"differential","left":"left","right":"right"}"#,
+        r#"[{"id":"run","kind":"process.exec","program":{"target":"probe"},"args":["emit-bytes","1048577"],"stdin":"closed","capture":["stdout","stderr","exit"],"timeout_ms":1000}]"#,
+        r#"[{"kind":"differential.equal","observation":"result"}]"#,
+    );
+
+    let error = run(&fixture.config(&["left", "right"]))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("exceeds policy maximum"), "{error}");
+}
+
+#[test]
+fn timed_out_process_groups_are_clean() {
+    let fixture = RunFixture::new();
+    fixture.write_rust_probe_target("left");
+    fixture.write_rust_probe_target("right");
+    fixture.write_scenario_with_steps(
+        r#"{"mode":"differential","left":"left","right":"right"}"#,
+        r#"[{"id":"run","kind":"process.exec","program":{"target":"probe"},"args":["sleep-ms","200"],"stdin":"closed","capture":["stdout","stderr","exit"],"timeout_ms":20}]"#,
+        r#"[{"kind":"differential.equal","observation":"result"}]"#,
+    );
+
+    let outcome = run(&fixture.config(&["left", "right"])).unwrap();
+    assert_eq!(outcome.verdict, Verdict::Passed);
+    let observations: Value =
+        serde_json::from_slice(&fs::read(outcome.run_directory.join("observations.json")).unwrap())
+            .unwrap();
+    for observation in observations.as_array().unwrap() {
+        assert_eq!(observation["process"]["timed_out"], true);
+        assert_eq!(observation["process"]["process_group_clean"], true);
+    }
 }
 
 #[test]
@@ -213,10 +276,30 @@ impl RunFixture {
         .unwrap();
     }
 
+    fn write_rust_probe_target(&self, id: &str) {
+        let probe = self.root.path().join("probe");
+        fs::copy(env!("CARGO_BIN_EXE_tode-contract-probe"), &probe).unwrap();
+        fs::write(
+            self.root.path().join(format!("{id}.target.jsonc")),
+            format!(
+                r#"{{"schema_version":1,"id":"{id}","programs":{{"probe":{{"executable":{{"repo_path":"probe"}}}}}}}}"#
+            ),
+        )
+        .unwrap();
+    }
+
     fn write_scenario(&self, targets: &str, assertions: &str) {
         fs::write(
             &self.scenario,
             valid_scenario(targets, process_steps(), assertions, None),
+        )
+        .unwrap();
+    }
+
+    fn write_scenario_with_steps(&self, targets: &str, steps: &str, assertions: &str) {
+        fs::write(
+            &self.scenario,
+            valid_scenario(targets, steps, assertions, None),
         )
         .unwrap();
     }
