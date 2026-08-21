@@ -17,3 +17,4 @@
 * **H3 C08 parity**: Added the Rust HTTP/1 injector with HTML/CSS/font/header/readiness/error behavior and raw WebSocket upgrade bridging; 7 Rust tests cover all 14 legacy injector cases.
 * **H3 C09/C11 parity**: Ported OSC palette parsing/fallbacks and source-preserving JSONC editing/parsing to Rust; 9 new tests raise mapped Rust contract coverage to 22.
 * **H3 C10 parity**: Ported complete sRGB/Oklch color math and the full workbench/token theme generator to Rust; 10 tests raise mapped Rust contract coverage to 32.
+* **H3 C13 parity**: Ported chord normalization plus Ghostty/Kitty trigger, config, include, emit, and shared-rebind transforms to Rust; 8 tests raise mapped Rust coverage to 40.
