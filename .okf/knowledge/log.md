@@ -28,3 +28,4 @@
 * **M4 verified artifacts**: Added streamed exact-size/SHA downloads, safe bounded tar.gz extraction, link rejection, failed-download cleanup, and rollback-safe directory swaps in Rust.
 * **M4 managed state**: Added typed server state, PID liveness, dual-listener validation, delayed readiness, stale-state cleanup, managed SIGTERM shutdown, and injector-origin behavior in Rust.
 * **M4 managed spawn**: Added exact code-server arguments/gallery environment, version capture, process-group spawn, log ownership, readiness, and shutdown integration using a Rust probe.
+* **M4 daemon composition**: Composed managed code-server, Rust injector, combined state, warm-up, proxied origin, and complete shutdown into one Rust daemon transaction.

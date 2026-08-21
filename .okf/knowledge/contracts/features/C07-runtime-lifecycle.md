@@ -9,10 +9,10 @@ implementation_status: rust-state-partial
 risk: critical
 owners: [runtime]
 surfaces: [process, filesystem, http, download]
-source_paths: [src/runtime/release.ts, src/codeserver/server.ts, src/codeserver/vendored.ts, crates/tode-runtime/src/artifact.rs, crates/tode-runtime/src/process.rs, crates/tode-runtime/tests/managed_code_server.rs]
+source_paths: [src/runtime/release.ts, src/codeserver/server.ts, src/codeserver/vendored.ts, crates/tode-runtime/src/artifact.rs, crates/tode-runtime/src/process.rs, crates/tode-runtime/src/daemon.rs, crates/tode-runtime/tests/managed_code_server.rs, crates/tode-runtime/tests/daemon.rs]
 scenario_ids: []
 legacy_test_paths: []
-rust_test_paths: [crates/tode-runtime/src/artifact.rs, crates/tode-runtime/src/process.rs, crates/tode-runtime/tests/managed_code_server.rs]
+rust_test_paths: [crates/tode-runtime/src/artifact.rs, crates/tode-runtime/src/process.rs, crates/tode-runtime/src/daemon.rs, crates/tode-runtime/tests/managed_code_server.rs, crates/tode-runtime/tests/daemon.rs]
 platforms: [macos, linux]
 sources:
   - { id: runtime, resource: ../../../../src/runtime/release.ts, title: Browser runtime resolution }
@@ -21,6 +21,7 @@ sources:
   - { id: rust, resource: ../../../../crates/tode-runtime/src/artifact.rs, title: Rust verified download, safe extraction, and atomic swap }
   - { id: rust-process, resource: ../../../../crates/tode-runtime/src/process.rs, title: Rust managed server state, readiness, and shutdown }
   - { id: rust-spawn, resource: ../../../../crates/tode-runtime/tests/managed_code_server.rs, title: Rust exact spawn and process ownership integration }
+  - { id: rust-daemon, resource: ../../../../crates/tode-runtime/tests/daemon.rs, title: Composed Rust code-server/injector/state integration }
 ---
 
 # Contract
@@ -29,4 +30,4 @@ Prefer verified vendored/offline artifacts, preserve target triples and platform
 
 # Coverage Status
 
-Twelve Rust tests cover verified artifacts/swaps, typed state/PID/readiness, exact code-server arguments/gallery environment, version capture, process-group spawn, log ownership, listener readiness, and shutdown. C07 remains draft until terminal-browser/code-server artifact resolution, injector composition, warm-up, and persistent daemon orchestration are wired.
+Fourteen Rust tests cover verified artifacts/swaps, state/PID/readiness, exact process spawn, combined code-server/injector state, proxied origin, warm-up-safe startup, and complete shutdown/state removal. C07 remains draft until terminal-browser/code-server artifact resolution and persistent daemon command orchestration are wired.

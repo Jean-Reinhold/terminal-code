@@ -21,7 +21,7 @@ sources:
 * Root Cargo workspace pinned to Rust 1.98.0.
 * `tode-core` Rust library with CLI identity, target/goto, Unix IPC, OSC palettes, source-preserving JSONC, complete themes, shortcut transforms/decisions, and release target/manifest/receipt schemas.
 * `tode-profile` Rust crate with XDG/install ownership, managed/seeded settings, atomic writes, managed theme extension/registry/live files, and full non-UI editor import.
-* `tode-runtime` Rust verified artifacts/swaps, HTTP injector, and exact managed code-server argument/version/log/readiness/process-group lifecycle.
+* `tode-runtime` Rust verified artifacts/swaps plus a composed managed code-server/injector/state/warm-up/shutdown daemon.
 * `tode-harness` binary/library with `catalog check`, `schema`, `run`, and `replay` commands.
 * YAML-backed OKF catalog with 22 contract concepts, draft-aware executable coverage, reciprocal scenario links, risk/owner/surface/platform/source validation, and all 119 legacy test declarations mapped.
 * Strict JSONC scenario v1 compiler and generated JSON Schema.
@@ -40,11 +40,11 @@ sources:
 
 # Verified Behavior
 
-* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 76 contract-mapped Rust tests.
+* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 78 contract-mapped Rust tests.
 * C01 Rust help/version scenarios matched exact snapshots captured from the legacy CLI.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* Ninety Rust workspace tests passed:
+* Ninety-two Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
   - CLI help completeness and version receipt/fallback;
@@ -79,7 +79,8 @@ sources:
   - five release target/manifest/build-selection/receipt tests;
   - five verified download/extraction/link-limit/atomic-swap tests;
   - five server state/PID/readiness/dual-listener/stale-cleanup tests;
-  - two exact code-server command/environment and managed spawn/readiness/shutdown integration tests.
+  - two exact code-server command/environment and managed spawn/readiness/shutdown integration tests;
+  - two daemon asset-extraction and composed code-server/injector/state/shutdown tests.
 * `cargo fmt --all` and strict Clippy with `-D warnings` passed.
 
 # Current Trust Boundary
@@ -102,4 +103,4 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 * JUnit/SARIF/static HTML reports, remote immutable storage, signatures, CI tiers, or release certificates.
 
 # Next Slice
-Continue M4 by composing the managed code-server and Rust injector into one daemon state transaction, adding warm-up, then terminal-browser vendored/offline resolution. Full C14 convergence remains explicitly open.
+Continue M4 with terminal-browser and code-server vendored/offline artifact resolution, then expose the composed daemon through production command orchestration. Full C14 convergence remains explicitly open.
