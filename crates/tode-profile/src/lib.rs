@@ -1,3 +1,9 @@
+pub mod import;
+
+pub use import::{
+    Editor, ExtensionsReport, ImportReport, SettingsReport, SkippedExtension, run_import,
+};
+
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::fs;

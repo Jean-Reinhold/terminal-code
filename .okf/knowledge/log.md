@@ -21,3 +21,4 @@
 * **H3 C01 parity**: Ported exact help/version identity to Rust, switched both C01 scenarios to `tode-contract-cli`, and removed the final Node target manifest from active harness execution.
 * **H3 C14 partial**: Ported persisted shortcut claim/import/quit/fallback binding behavior to Rust; full manager-row claimant graph and adversarial convergence remain open.
 * **M3 C11 profile ownership**: Added `tode-profile` with exact XDG/install paths, managed/seeded settings precedence, atomic mode-preserving writes, and idempotent installation tests.
+* **M3 C12 import**: Ported settings, keybindings, snippets, tasks, extension registry/copy, reports, deduplication, and unsafe/symlink rejection to Rust.

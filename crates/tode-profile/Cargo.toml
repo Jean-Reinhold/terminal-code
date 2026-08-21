@@ -6,6 +6,8 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+serde.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 tode-core = { path = "../tode-core" }
+walkdir.workspace = true

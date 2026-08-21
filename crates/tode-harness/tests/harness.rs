@@ -33,7 +33,7 @@ fn repository_catalog_and_schema_are_current() {
     );
     assert_eq!(summary.scenarios, 10);
     assert_eq!(summary.legacy_tests, 119);
-    assert_eq!(summary.rust_tests, 51);
+    assert_eq!(summary.rust_tests, 55);
 
     let generated: Value = serde_json::from_str(&scenario_schema_json().unwrap()).unwrap();
     let committed: Value = serde_json::from_slice(
