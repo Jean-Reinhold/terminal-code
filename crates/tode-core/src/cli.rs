@@ -1,0 +1,46 @@
+use std::fs;
+use std::path::Path;
+
+pub const HELP: &str = "Usage: tode [path...] [options]\n       tode --<command>\n\n  tode                  Open the folder in the current working directory\n  tode <folder>         Open the specified folder\n  tode <file>           Open the specified file\n\n\nOptions:\n  -g, --goto <f:l:c>    Open a file at a line and column\n  -a, --add <folder>    Add a folder to the active workspace\n  -n, --new-window      Open a new pane even for a file\n  -w, --wait            Wait until the file is closed again\n  -d, --diff <a> <b>    Compare two files\n  -r, --reuse-window    Open folder in this window rather than a new pane\n  --install-extension   Install an extension by id or vsix path\n  --uninstall-extension Remove an extension\n  --list-extensions     List installed extensions\n  --split <direction>   Open in a new pane: right, left, down, up\n  --size <fraction>     The % a new split will take up (0.2 to 0.95)\n  --timing              Report how long each stage of this open took\n  --review              Open on the source control panel\n\nCommands, each as the first argument:\n  --shortcut-setup      Resolve shortcut conflicts between terminal-code and the current terminal\n  --timing              Profile terminal-code launch\n  --import [editor]     Bring settings, keybindings, snippets and extensions\n                        over from vscode compatible editors\n  --theme [file]        Set editor theme\n  --skill               An agent skill to assist with modifying terminal-code\n  --upgrade [--check]   Upgrade terminal-code to the latest version\n  --shutdown            Stop all terminal-code activities\n  --uninstall [--yes]   Remove all terminal-code data from this machine\n";
+
+pub fn installed_version(install_root: &Path) -> String {
+    fs::read_to_string(install_root.join("VERSION"))
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "dev".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::TempDir;
+
+    use super::*;
+
+    #[test]
+    fn reads_trimmed_version_and_falls_back_to_dev() {
+        let root = TempDir::new().unwrap();
+        assert_eq!(installed_version(root.path()), "dev");
+        fs::write(root.path().join("VERSION"), "v1.2.3\n").unwrap();
+        assert_eq!(installed_version(root.path()), "v1.2.3");
+        fs::write(root.path().join("VERSION"), "  \n").unwrap();
+        assert_eq!(installed_version(root.path()), "dev");
+    }
+
+    #[test]
+    fn help_contains_every_public_command() {
+        for command in [
+            "--shortcut-setup",
+            "--timing",
+            "--import",
+            "--theme",
+            "--skill",
+            "--upgrade",
+            "--shutdown",
+            "--uninstall",
+        ] {
+            assert!(HELP.contains(command), "{command}");
+        }
+        assert!(HELP.ends_with('\n'));
+    }
+}

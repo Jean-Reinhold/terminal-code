@@ -19,7 +19,7 @@ sources:
 # Implemented
 
 * Root Cargo workspace pinned to Rust 1.98.0.
-* `tode-core` Rust library with target/goto, Unix IPC, OSC palettes, source-preserving JSONC, complete themes, and Ghostty/Kitty shortcut transforms.
+* `tode-core` Rust library with CLI identity, target/goto, Unix IPC, OSC palettes, source-preserving JSONC, complete themes, and Ghostty/Kitty shortcut transforms.
 * `tode-runtime` Rust HTTP/1 injector with CSS/font handling, header rewriting, readiness hold, controlled errors, and upgraded-stream bridging.
 * `tode-harness` binary/library with `catalog check`, `schema`, `run`, and `replay` commands.
 * YAML-backed OKF catalog with 22 contract concepts, draft-aware executable coverage, reciprocal scenario links, risk/owner/surface/platform/source validation, and all 119 legacy test declarations mapped.
@@ -33,18 +33,20 @@ sources:
 * Held loopback port and short Unix-socket lease broker, 1 MiB process-output budget, and process-group cleanup invariant.
 * Bounded Unix JSON-line peer scenario adapter with typed environment injection, transcript artifacts, exact JSON assertions, timeout, and oversized-request rejection.
 * C01-C22 individual OKF compatibility concepts.
-* Ten characterization scenarios: two legacy C01 CLI scenarios, four Rust C02 target/goto scenarios, and four Rust C05 IPC scenarios.
+* Ten Rust characterization scenarios: two C01 CLI identity, four C02 target/goto, and four C05 IPC.
 * Rust `tode-contract-probe` binary that serializes `tode-core` results without duplicating product logic.
+* Rust `tode-contract-cli` binary for exact help/version identity; no active harness target executes Node.
 
 # Verified Behavior
 
-* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 40 contract-mapped Rust tests.
-* C01 help/version scenarios passed against the real legacy CLI in fresh sandboxes.
+* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 42 contract-mapped Rust tests.
+* C01 Rust help/version scenarios matched exact snapshots captured from the legacy CLI.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* Fifty-four Rust workspace tests passed:
+* Fifty-six Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
+  - CLI help completeness and version receipt/fallback;
   - IPC JSON-line framing and omitted optional fields;
   - IPC explicit refusal and unreadable reply errors;
   - IPC read timeout mapping;
@@ -75,6 +77,8 @@ sources:
 
 The implemented deterministic core does not depend on any model SDK. There is no `tode-harness-agent` crate yet. This is intentional: agent proposals cannot precede a trustworthy schema, execution, artifact, oracle, and replay path.
 
+All active harness target manifests execute Rust binaries. Legacy behavior is retained only as reviewed snapshots and source/test mapping evidence.
+
 Network policy in scenario v1 is only `not-required`. The S1 runner does not claim hard network denial or loopback isolation on macOS. Those modes remain unavailable until an S2 worker/adapter can attest enforcement.
 
 Execution policy v1 rejects declared retries rather than ignoring them. Classified retry/resumption remains H6 work.
@@ -82,7 +86,7 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 # Not Implemented Yet
 
 * Executable scenarios for C03-C04 and C06-C22; their concepts and legacy test mappings are complete.
-* A Rust product CLI target for C01 and direct dual-target differential execution; C02 currently uses reviewed legacy-derived exact snapshots.
+* The production M6 `tode` binary and direct dual-target differential execution; C01/C02 currently use reviewed legacy-derived exact snapshots through Rust contract binaries.
 * PTY/OSC, browser, terminal hardware, release/R2, and install scenario adapters.
 * Hard S2/S3 isolation, total resource budgets, fault injection, and crash resumption.
 * Structured agent task envelopes/providers/roles, DeepSeek invocation, redaction, proposal admission, or skeptic/curator workflows.
@@ -90,4 +94,4 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Next Slice
 
-Continue H3 with the C14 shortcut decision/convergence state machine and adversarial closed loop, then C12 import/profile state. Add a Rust product CLI target for C01 so help/version can leave the Node oracle.
+Continue H3 with the C14 shortcut decision/convergence state machine and adversarial closed loop, then C12 import/profile state. Promote the Rust contract CLI into the production `tode` binary only when M6 command orchestration is complete.

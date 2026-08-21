@@ -5,7 +5,7 @@
   "title": "CLI version reads the installation receipt",
   "contracts": ["C01"],
   "risk": "medium",
-  "targets": { "mode": "single", "target": "legacy" },
+  "targets": { "mode": "single", "target": "rust-cli" },
   "requires": {
     "os": ["macos", "linux"],
     "capabilities": ["process", "filesystem"],

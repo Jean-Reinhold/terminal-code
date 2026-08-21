@@ -5,7 +5,7 @@ contract_id: C01
 description: Preserve help, version, default-current-directory, and basic target invocation identity.
 tags: [cli, identity, help, version]
 status: draft
-implementation_status: legacy-characterized
+implementation_status: rust-identity-parity
 risk: medium
 owners: [cli]
 surfaces: [cli, filesystem]
@@ -13,13 +13,17 @@ source_paths:
   - README.md
   - src/main.ts
   - src/target.ts
+  - crates/tode-core/src/cli.rs
 scenario_ids:
   - cli.help
   - cli.version
+rust_test_paths:
+  - crates/tode-core/src/cli.rs
 platforms: [macos, linux]
 sources:
   - { id: readme, resource: ../../../../README.md, title: Public CLI usage }
   - { id: main, resource: ../../../../src/main.ts, title: Current CLI implementation }
+  - { id: rust, resource: ../../../../crates/tode-core/src/cli.rs, title: Rust CLI identity implementation }
 ---
 
 # Contract
@@ -34,4 +38,4 @@ sources:
 * [Help scenario](../../../../harness/scenarios/cli/help.scenario.jsonc)
 * [Version scenario](../../../../harness/scenarios/cli/version.scenario.jsonc)
 
-C01 remains draft until the Rust product CLI exists and these scenarios run differentially. The current slice characterizes the legacy target and proves deterministic evidence/replay.
+The Rust `tode-contract-cli` help and version scenarios match exact snapshots captured from the legacy CLI, and no harness target executes Node. C01 remains draft until the production M6 `tode` binary uses this identity code and wires default target/error behavior.

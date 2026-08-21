@@ -1,3 +1,4 @@
+pub mod cli;
 pub mod color;
 pub mod ipc;
 pub mod jsonc;
@@ -6,6 +7,7 @@ pub mod shortcuts;
 pub mod target;
 pub mod theme;
 
+pub use cli::{HELP, installed_version};
 pub use color::{
     Oklch, contrast, from_oklch, hex, is_dark, legible, luminance, mix, parse_hex, shade, to_oklch,
     with_alpha,
