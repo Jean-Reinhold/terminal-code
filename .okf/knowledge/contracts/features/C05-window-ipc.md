@@ -16,6 +16,8 @@ scenario_ids:
   - ipc.window-reuse.timeout
   - ipc.window-reuse.wait
 legacy_test_paths: [test/livesync.test.js]
+rust_test_paths:
+  - crates/tode-core/src/ipc.rs
 platforms: [macos, linux]
 sources:
   - { id: ipc, resource: ../../../../src/ipc.ts, title: IPC client }

@@ -23,6 +23,8 @@ pub struct ContractMetadata {
     pub scenario_ids: Vec<String>,
     #[serde(default)]
     pub legacy_test_paths: Vec<String>,
+    #[serde(default)]
+    pub rust_test_paths: Vec<String>,
     pub platforms: Vec<String>,
 }
 
@@ -37,6 +39,7 @@ pub struct CatalogSummary {
     pub contracts: usize,
     pub scenarios: usize,
     pub legacy_tests: usize,
+    pub rust_tests: usize,
     pub contract_ids: Vec<String>,
     pub scenario_ids: Vec<String>,
 }
@@ -48,11 +51,12 @@ pub fn check_catalog(
 ) -> Result<CatalogSummary> {
     let contracts = discover_contracts(contract_root)?;
     let scenarios = discover_scenarios(scenario_root)?;
-    let legacy_tests = validate_catalog(repo_root, &contracts, &scenarios)?;
+    let (legacy_tests, rust_tests) = validate_catalog(repo_root, &contracts, &scenarios)?;
     Ok(CatalogSummary {
         contracts: contracts.len(),
         scenarios: scenarios.len(),
         legacy_tests,
+        rust_tests,
         contract_ids: contracts.keys().cloned().collect(),
         scenario_ids: scenarios.keys().cloned().collect(),
     })
@@ -112,7 +116,7 @@ fn validate_catalog(
     repo_root: &Path,
     contracts: &BTreeMap<String, Contract>,
     scenarios: &BTreeMap<String, (PathBuf, Scenario)>,
-) -> Result<usize> {
+) -> Result<(usize, usize)> {
     let repo_root = repo_root.canonicalize().map_err(|error| {
         HarnessError::io(format!("canonicalize {}", repo_root.display()), error)
     })?;
@@ -177,7 +181,10 @@ fn validate_catalog(
             }
         }
     }
-    count_mapped_legacy_tests(&repo_root, contracts)
+    Ok((
+        count_mapped_legacy_tests(&repo_root, contracts)?,
+        count_mapped_rust_tests(&repo_root, contracts)?,
+    ))
 }
 
 fn validate_contract_metadata(metadata: &ContractMetadata, path: &Path) -> Result<()> {
@@ -222,6 +229,7 @@ fn validate_contract_metadata(metadata: &ContractMetadata, path: &Path) -> Resul
         path,
         false,
     )?;
+    validate_nonempty_unique(&metadata.rust_test_paths, "rust_test_paths", path, false)?;
     if metadata.status == "stable" && metadata.scenario_ids.is_empty() {
         return Err(HarnessError::Invalid(format!(
             "{}: stable contract requires at least one scenario",
@@ -296,6 +304,31 @@ fn count_mapped_legacy_tests(
             )));
         }
         count += declarations;
+    }
+    Ok(count)
+}
+
+fn count_mapped_rust_tests(
+    repo_root: &Path,
+    contracts: &BTreeMap<String, Contract>,
+) -> Result<usize> {
+    let mapped: BTreeSet<_> = contracts
+        .values()
+        .flat_map(|contract| contract.metadata.rust_test_paths.iter().cloned())
+        .collect();
+    let mut count = 0;
+    for relative in mapped {
+        let path = repo_root.join(&relative);
+        if !path.is_file() {
+            return Err(HarnessError::Invalid(format!(
+                "mapped Rust test path does not exist: {relative}"
+            )));
+        }
+        let text = fs::read_to_string(&path).map_err(|error| {
+            HarnessError::io(format!("read mapped Rust test {relative}"), error)
+        })?;
+        count += text.match_indices("#[test]").count();
+        count += text.match_indices("#[tokio::test]").count();
     }
     Ok(count)
 }

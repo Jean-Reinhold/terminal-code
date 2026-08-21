@@ -14,3 +14,4 @@
 * **H2 completion**: Added canonical filesystem evidence, held port/socket leases, output budgets, process cleanup invariants, bounded Unix JSON-line peers, transcript assertions, timeout/oversize failures, and replayable C05 evidence.
 * **H3 C05 parity**: Ported the Unix IPC client to `tode-core` and added Rust success, refusal, timeout, wait, unreadable, framing, and missing-socket evidence without Node test wrappers.
 * **Video cleanup**: Removed stale dark/light demo media and the custom client player, browser-verified the cleaned homepage, and added a deferred [certified replacement-video plan](plans/replacement-demo-video.md).
+* **H3 C08 parity**: Added the Rust HTTP/1 injector with HTML/CSS/font/header/readiness/error behavior and raw WebSocket upgrade bridging; 7 Rust tests cover all 14 legacy injector cases.

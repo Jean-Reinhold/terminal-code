@@ -21,6 +21,8 @@ scenario_ids:
   - cli.goto
 legacy_test_paths:
   - test/target.test.js
+rust_test_paths:
+  - crates/tode-core/src/target.rs
 platforms: [macos, linux]
 sources:
   - { id: target, resource: ../../../../src/target.ts, title: Target resolution }
