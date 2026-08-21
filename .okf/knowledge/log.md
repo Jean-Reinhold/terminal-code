@@ -26,3 +26,4 @@
 * **M3 theme installation**: Added Rust managed theme extension manifests, registry replacement, old fingerprint cleanup, live-theme output, and idempotent installation.
 * **M2 completion**: Ported the final release target/manifest/receipt schemas; all planned pure algorithm/schema families now exist in Rust, with fuzz/mutation expansion reserved for H6.
 * **M4 verified artifacts**: Added streamed exact-size/SHA downloads, safe bounded tar.gz extraction, link rejection, failed-download cleanup, and rollback-safe directory swaps in Rust.
+* **M4 managed state**: Added typed server state, PID liveness, dual-listener validation, delayed readiness, stale-state cleanup, managed SIGTERM shutdown, and injector-origin behavior in Rust.
