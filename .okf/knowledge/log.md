@@ -40,3 +40,4 @@
 * **M6 uninstall**: Added safe Rust owned-path/font/shim/terminal-config uninstall service and production `--uninstall --yes` integration with unrelated-data protection.
 * **M6/M7 upgrade**: Added verified Rust current/available/upgraded transactions and production `--upgrade --check` manifest/build selection integration.
 * **M6 timing**: Ported typed timing files and exact report formatting, generated the Electron top-frame timing bridge from Rust, recorded cumulative launch stages, passed preload/main-script arguments to terminal-browser, and wired both standalone and per-open `--timing`.
+* **M6 skill**: Ported first-position `--skill` dispatch and a read-only live Rust knowledge document covering resolved install/runtime/profile/browser/terminal/extension/daemon state without triggering downloads.

@@ -233,6 +233,14 @@ fn base(
         .unwrap_or_else(|| home.join(fallback))
 }
 
+pub fn managed_setting_keys() -> Vec<&'static str> {
+    managed_settings().into_iter().map(|(key, _)| key).collect()
+}
+
+pub fn seeded_setting_keys() -> Vec<&'static str> {
+    seeded_settings().into_iter().map(|(key, _)| key).collect()
+}
+
 fn managed_settings() -> Vec<(&'static str, Value)> {
     let stack = format!("\"{FONT_FAMILY}\", {FONT_FALLBACKS}");
     vec![

@@ -1,3 +1,5 @@
+mod skill;
+
 use std::collections::BTreeMap;
 use std::env;
 use std::ffi::OsString;
@@ -54,6 +56,7 @@ enum CliCommand {
     Version,
     Shutdown,
     Timing,
+    Skill,
     Import(Option<String>),
     Theme(Option<String>),
     Uninstall(bool),
@@ -94,6 +97,20 @@ async fn execute() -> Result<u8, String> {
         CliCommand::Import(name) => import_editor(name.as_deref(), &home, &environment, &paths),
         CliCommand::Theme(file) => set_theme(file.as_deref(), &paths),
         CliCommand::Timing => timing_command(&paths),
+        CliCommand::Skill => {
+            print!(
+                "{}",
+                skill::skill_text(&skill::SkillContext {
+                    home: &home,
+                    environment: &environment,
+                    paths: &paths,
+                    terminal_browser_version: TERMINAL_BROWSER_VERSION,
+                    code_server_version: CODE_SERVER_VERSION,
+                })
+                .await
+            );
+            Ok(0)
+        }
         CliCommand::Uninstall(yes) => uninstall_command(yes, &home, &environment, &paths),
         CliCommand::Upgrade { check, version } => {
             upgrade_command(check, version.as_deref(), &environment, &paths).await
@@ -609,6 +626,7 @@ fn parse_command(arguments: Vec<String>) -> Result<CliCommand, String> {
         [flag] if matches!(flag.as_str(), "--version" | "-v") => return Ok(CliCommand::Version),
         [flag] if flag == "--shutdown" => return Ok(CliCommand::Shutdown),
         [flag] if flag == "--timing" => return Ok(CliCommand::Timing),
+        [flag, ..] if flag == "--skill" => return Ok(CliCommand::Skill),
         [flag, rest @ ..] if flag == "--upgrade" => {
             let mut check = false;
             let mut version = None;
@@ -828,6 +846,10 @@ mod tests {
         assert_eq!(
             parse_command(vec!["--timing".into()]).unwrap(),
             CliCommand::Timing
+        );
+        assert_eq!(
+            parse_command(vec!["--skill".into(), "ignored".into()]).unwrap(),
+            CliCommand::Skill
         );
         assert_eq!(
             parse_command(vec!["--import".into()]).unwrap(),
