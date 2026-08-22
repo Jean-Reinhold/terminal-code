@@ -1,0 +1,22 @@
+[package]
+name = "tode-cli"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "tode"
+path = "src/main.rs"
+
+[dependencies]
+nix.workspace = true
+reqwest.workspace = true
+serde_json.workspace = true
+tode-core = { path = "../tode-core" }
+tode-profile = { path = "../tode-profile" }
+tode-runtime = { path = "../tode-runtime" }
+tokio.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -5,7 +5,7 @@ contract_id: C01
 description: Preserve help, version, default-current-directory, and basic target invocation identity.
 tags: [cli, identity, help, version]
 status: draft
-implementation_status: rust-identity-parity
+implementation_status: rust-production-basic
 risk: medium
 owners: [cli]
 surfaces: [cli, filesystem]
@@ -13,17 +13,21 @@ source_paths:
   - README.md
   - src/main.ts
   - src/target.ts
-  - crates/tode-core/src/cli.rs
+  - crates/tode-cli/src/main.rs
+  - crates/tode-cli/tests/open.rs
 scenario_ids:
   - cli.help
   - cli.version
 rust_test_paths:
   - crates/tode-core/src/cli.rs
+  - crates/tode-cli/src/main.rs
+  - crates/tode-cli/tests/open.rs
 platforms: [macos, linux]
 sources:
   - { id: readme, resource: ../../../../README.md, title: Public CLI usage }
   - { id: main, resource: ../../../../src/main.ts, title: Current CLI implementation }
   - { id: rust, resource: ../../../../crates/tode-core/src/cli.rs, title: Rust CLI identity implementation }
+  - { id: rust-production, resource: ../../../../crates/tode-cli/tests/open.rs, title: Production Rust CLI open and shutdown integration }
 ---
 
 # Contract
@@ -38,4 +42,4 @@ sources:
 * [Help scenario](../../../../harness/scenarios/cli/help.scenario.jsonc)
 * [Version scenario](../../../../harness/scenarios/cli/version.scenario.jsonc)
 
-The Rust `tode-contract-cli` help and version scenarios match exact snapshots captured from the legacy CLI, and no harness target executes Node. C01 remains draft until the production M6 `tode` binary uses this identity code and wires default target/error behavior.
+The production Rust `tode` uses the exact help/version code and passes a real basic open/shutdown integration. C01 remains draft only for remaining multi-target and error-prefix scenarios in the full M6 parser.

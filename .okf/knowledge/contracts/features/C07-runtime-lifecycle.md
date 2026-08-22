@@ -9,10 +9,10 @@ implementation_status: rust-daemon-command-parity
 risk: critical
 owners: [runtime]
 surfaces: [process, filesystem, http, download]
-source_paths: [src/runtime/release.ts, src/codeserver/server.ts, src/codeserver/vendored.ts, crates/tode-runtime/src/artifact.rs, crates/tode-runtime/src/browser.rs, crates/tode-runtime/src/process.rs, crates/tode-runtime/src/daemon.rs, crates/tode-runtime/src/bin/tode-daemon.rs, crates/tode-runtime/tests/managed_code_server.rs, crates/tode-runtime/tests/daemon.rs, crates/tode-runtime/tests/daemon_command.rs]
+source_paths: [src/runtime/release.ts, src/codeserver/server.ts, src/codeserver/vendored.ts, crates/tode-cli/tests/open.rs, crates/tode-runtime/src/artifact.rs, crates/tode-runtime/src/browser.rs, crates/tode-runtime/src/process.rs, crates/tode-runtime/src/daemon.rs, crates/tode-runtime/src/bin/tode-daemon.rs, crates/tode-runtime/tests/managed_code_server.rs, crates/tode-runtime/tests/daemon.rs, crates/tode-runtime/tests/daemon_command.rs]
 scenario_ids: []
 legacy_test_paths: []
-rust_test_paths: [crates/tode-runtime/src/artifact.rs, crates/tode-runtime/src/browser.rs, crates/tode-runtime/src/process.rs, crates/tode-runtime/src/daemon.rs, crates/tode-runtime/src/bin/tode-daemon.rs, crates/tode-runtime/tests/managed_code_server.rs, crates/tode-runtime/tests/daemon.rs, crates/tode-runtime/tests/daemon_command.rs]
+rust_test_paths: [crates/tode-cli/tests/open.rs, crates/tode-runtime/src/artifact.rs, crates/tode-runtime/src/browser.rs, crates/tode-runtime/src/process.rs, crates/tode-runtime/src/daemon.rs, crates/tode-runtime/src/bin/tode-daemon.rs, crates/tode-runtime/tests/managed_code_server.rs, crates/tode-runtime/tests/daemon.rs, crates/tode-runtime/tests/daemon_command.rs]
 platforms: [macos, linux]
 sources:
   - { id: runtime, resource: ../../../../src/runtime/release.ts, title: Browser runtime resolution }
@@ -24,6 +24,7 @@ sources:
   - { id: rust-daemon, resource: ../../../../crates/tode-runtime/tests/daemon.rs, title: Composed Rust code-server/injector/state integration }
   - { id: rust-browser, resource: ../../../../crates/tode-runtime/src/browser.rs, title: Rust terminal-browser existing-source resolver and launcher }
   - { id: rust-daemon-command, resource: ../../../../crates/tode-runtime/tests/daemon_command.rs, title: Persistent Rust daemon command integration }
+  - { id: rust-cli, resource: ../../../../crates/tode-cli/tests/open.rs, title: Production Rust runtime start/reuse/launch/shutdown integration }
 ---
 
 # Contract
@@ -32,4 +33,4 @@ Prefer verified vendored/offline artifacts, preserve target triples and platform
 
 # Coverage Status
 
-Twenty-one Rust tests cover all artifact/runtime sources, launchers, state/readiness, exact code-server spawn, composed daemon, persistent command readiness announcement, SIGTERM handling, child shutdown, and state removal. C07’s Rust runtime path is implemented; it remains draft until the production `tode` CLI starts/reuses this daemon with real pinned upstream artifacts on supported platforms.
+Twenty-two Rust tests cover all artifact/runtime sources, launchers, state/readiness, exact code-server spawn, composed/persistent daemon, downloaded resolution, production CLI start, workbench launch, shutdown, and state cleanup. C07 remains draft for real pinned upstream hardware/platform certification and bridge/preload integration.

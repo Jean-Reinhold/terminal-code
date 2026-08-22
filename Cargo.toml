@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/tode-core", "crates/tode-harness", "crates/tode-profile", "crates/tode-runtime"]
+members = ["crates/tode-cli", "crates/tode-core", "crates/tode-harness", "crates/tode-profile", "crates/tode-runtime"]
 resolver = "2"
 
 [workspace.package]
@@ -27,5 +27,6 @@ thiserror = "2"
 tar = "0.4"
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
 wait-timeout = "0.2"
+url = "2"
 walkdir = "2"
 yaml_serde = "0.10.7"

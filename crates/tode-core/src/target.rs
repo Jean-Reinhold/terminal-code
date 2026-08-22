@@ -32,6 +32,25 @@ pub fn resolve_target(argument: Option<&str>, cwd: &Path) -> Target {
     }
 }
 
+pub fn workbench_url(origin: &str, target: &Target) -> Result<String, url::ParseError> {
+    let mut url = url::Url::parse(origin)?;
+    if let Some(folder) = &target.folder {
+        url.query_pairs_mut()
+            .append_pair("folder", &folder.to_string_lossy());
+    }
+    if let Some(file) = &target.file {
+        let authority = match url.port() {
+            Some(port) => format!("{}:{port}", url.host_str().unwrap_or_default()),
+            None => url.host_str().unwrap_or_default().to_owned(),
+        };
+        let uri = format!("vscode-remote://{authority}{}", file.to_string_lossy());
+        let payload = serde_json::to_string(&vec![vec!["openFile", &uri]])
+            .expect("workbench payload serializes");
+        url.query_pairs_mut().append_pair("payload", &payload);
+    }
+    Ok(url.to_string())
+}
+
 pub fn parse_goto(argument: &str, cwd: &Path) -> OpenFile {
     let candidate = Path::new(argument);
     let existing = if candidate.is_absolute() {
@@ -167,6 +186,41 @@ mod tests {
                 line: None,
                 column: None
             }
+        );
+    }
+
+    #[test]
+    fn workbench_url_preserves_folder_and_remote_file_payloads() {
+        let folder = workbench_url(
+            "http://127.0.0.1:4000/",
+            &Target {
+                folder: Some("/workspace".into()),
+                file: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(folder, "http://127.0.0.1:4000/?folder=%2Fworkspace");
+        let file = workbench_url(
+            "http://127.0.0.1:4000/",
+            &Target {
+                folder: None,
+                file: Some("/workspace/main.rs".into()),
+            },
+        )
+        .unwrap();
+        let parsed = url::Url::parse(&file).unwrap();
+        let payload = parsed
+            .query_pairs()
+            .find(|(key, _)| key == "payload")
+            .unwrap()
+            .1;
+        let payload: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        assert_eq!(
+            payload,
+            serde_json::json!([[
+                "openFile",
+                "vscode-remote://127.0.0.1:4000/workspace/main.rs"
+            ]])
         );
     }
 }

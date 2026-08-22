@@ -1,4 +1,5 @@
 use std::env;
+use std::io::{self, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -55,7 +56,10 @@ async fn main() -> ExitCode {
         }
     };
     match serde_json::to_string(&daemon.state) {
-        Ok(state) => println!("{state}"),
+        Ok(state) => {
+            println!("{state}");
+            let _ = io::stdout().flush();
+        }
         Err(error) => {
             eprintln!("tode-daemon: serialize state: {error}");
             let _ = daemon.shutdown().await;

@@ -31,7 +31,7 @@ pub use shortcuts::{
     kitty_without_include, normalize_chord, override_bindings, parse_ghostty_trigger,
     quit_bindings, quit_chord, quit_when,
 };
-pub use target::{OpenFile, Target, parse_goto, resolve_target};
+pub use target::{OpenFile, Target, parse_goto, resolve_target, workbench_url};
 pub use theme::{
     GeneratedTheme, SemanticColors, Surfaces, generate_theme, palette_fingerprint, semantic_colors,
     surfaces, theme_fingerprint,
