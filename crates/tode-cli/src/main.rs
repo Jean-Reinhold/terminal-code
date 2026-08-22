@@ -11,16 +11,17 @@ use std::process::{Command, ExitCode, Stdio};
 use std::time::Duration;
 
 use tode_core::{
-    HELP, OpenFile, OpenRequest, installed_version, parse_goto, resolve_target, send_to_extension,
-    with_fallbacks, workbench_url,
+    HELP, OpenFile, OpenRequest, ReleaseManifest, build_for, current_target_triple,
+    installed_receipt, installed_version, latest_manifest_path, parse_goto, resolve_target,
+    send_to_extension, with_fallbacks, workbench_url,
 };
 use tode_profile::{
     FONT_FAMILY, ProfilePaths, UninstallConfig, find_editors, install_settings, install_theme,
     run_import, uninstall, write_if_changed,
 };
 use tode_runtime::{
-    BrowserHomes, RuntimeRoots, ServerState, current_server, injected_css, resolve_runtime,
-    stop_server,
+    BrowserHomes, RuntimeRoots, ServerState, UpgradeOutcome, apply_build, current_server,
+    injected_css, resolve_runtime, stop_server,
 };
 
 const TERMINAL_BROWSER_VERSION: &str = "v0.5.8";
@@ -53,6 +54,10 @@ enum CliCommand {
     Import(Option<String>),
     Theme(Option<String>),
     Uninstall(bool),
+    Upgrade {
+        check: bool,
+        version: Option<String>,
+    },
     Open(OpenOptions),
 }
 
@@ -86,6 +91,9 @@ async fn execute() -> Result<u8, String> {
         CliCommand::Import(name) => import_editor(name.as_deref(), &home, &environment, &paths),
         CliCommand::Theme(file) => set_theme(file.as_deref(), &paths),
         CliCommand::Uninstall(yes) => uninstall_command(yes, &home, &environment, &paths),
+        CliCommand::Upgrade { check, version } => {
+            upgrade_command(check, version.as_deref(), &environment, &paths).await
+        }
         CliCommand::Shutdown => {
             let stopped = stop_server(&paths.state.join("server.json"));
             println!(
@@ -465,11 +473,93 @@ fn uninstall_command(
     Ok(0)
 }
 
+async fn upgrade_command(
+    check: bool,
+    version: Option<&str>,
+    environment: &BTreeMap<OsString, OsString>,
+    paths: &ProfilePaths,
+) -> Result<u8, String> {
+    let origin = environment
+        .get(&OsString::from("TODE_RELEASE_ORIGIN"))
+        .and_then(|value| value.to_str())
+        .unwrap_or("https://tode.sh/install")
+        .trim_end_matches('/');
+    let installed = installed_receipt(&paths.install_root);
+    let url = match version {
+        Some(version) => format!("{origin}/v/{version}/manifest.json"),
+        None => {
+            let channel = installed
+                .as_ref()
+                .map(|receipt| receipt.channel.as_str())
+                .unwrap_or("stable");
+            format!("{origin}{}", latest_manifest_path(channel))
+        }
+    };
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|error| format!("could not read {url}: {error}"))?;
+    if !response.status().is_success() {
+        return Err(format!("could not read {url} ({})", response.status()));
+    }
+    let manifest: ReleaseManifest = response
+        .json()
+        .await
+        .map_err(|error| format!("invalid release manifest from {url}: {error}"))?;
+    let build = build_for(&manifest, &current_target_triple())?;
+    match apply_build(&client, &build, &paths.install_root, check)
+        .await
+        .map_err(|error| error.to_string())?
+    {
+        UpgradeOutcome::Current { version, channel } => {
+            println!("tode {version} is the newest on {channel}");
+        }
+        UpgradeOutcome::Available { from: _, build } => {
+            println!(
+                "tode {} is available (you have {})",
+                build.version,
+                installed
+                    .as_ref()
+                    .map(|receipt| receipt.version.as_str())
+                    .unwrap_or("unknown")
+            );
+        }
+        UpgradeOutcome::Upgraded { from, build } => {
+            stop_server(&paths.state.join("server.json"));
+            println!("tode {from} -> {}", build.version);
+        }
+    }
+    Ok(0)
+}
+
 fn parse_command(arguments: Vec<String>) -> Result<CliCommand, String> {
     match arguments.as_slice() {
         [flag] if matches!(flag.as_str(), "--help" | "-h") => return Ok(CliCommand::Help),
         [flag] if matches!(flag.as_str(), "--version" | "-v") => return Ok(CliCommand::Version),
         [flag] if flag == "--shutdown" => return Ok(CliCommand::Shutdown),
+        [flag, rest @ ..] if flag == "--upgrade" => {
+            let mut check = false;
+            let mut version = None;
+            let mut index = 0;
+            while index < rest.len() {
+                match rest[index].as_str() {
+                    "--check" => check = true,
+                    "--version" => {
+                        version = Some(
+                            rest.get(index + 1)
+                                .ok_or_else(|| "--version needs a value".to_owned())?
+                                .clone(),
+                        );
+                        index += 1;
+                    }
+                    option => return Err(format!("unknown upgrade option {option}")),
+                }
+                index += 1;
+            }
+            return Ok(CliCommand::Upgrade { check, version });
+        }
         [flag, rest @ ..] if flag == "--import" => {
             if rest.len() > 1 {
                 return Err("--import takes at most one editor name".into());
@@ -683,6 +773,19 @@ mod tests {
         assert_eq!(
             parse_command(vec!["--uninstall".into(), "--yes".into()]).unwrap(),
             CliCommand::Uninstall(true)
+        );
+        assert_eq!(
+            parse_command(vec![
+                "--upgrade".into(),
+                "--check".into(),
+                "--version".into(),
+                "v2".into(),
+            ])
+            .unwrap(),
+            CliCommand::Upgrade {
+                check: true,
+                version: Some("v2".into()),
+            }
         );
         assert_eq!(
             parse_command(Vec::new()).unwrap(),

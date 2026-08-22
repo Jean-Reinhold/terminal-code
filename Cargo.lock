@@ -1384,6 +1384,7 @@ dependencies = [
  "tar",
  "tempfile",
  "thiserror",
+ "tode-core",
  "tokio",
  "walkdir",
 ]

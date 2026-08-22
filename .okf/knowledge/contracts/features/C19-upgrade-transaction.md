@@ -5,20 +5,22 @@ contract_id: C19
 description: Preserve latest/pinned lookup, check outcomes, verified fetch, atomic swap, receipts, and rollback safety.
 tags: [upgrade, release, atomicity, rollback]
 status: draft
-implementation_status: rust-artifact-partial
+implementation_status: rust-production-check-partial
 risk: critical
 owners: [release, runtime]
 surfaces: [cli, http, filesystem, process]
-source_paths: [src/upgrade.ts, src/runtime/release.ts, scripts/install.sh, scripts/release.sh, crates/tode-core/src/release.rs, crates/tode-runtime/src/artifact.rs]
+source_paths: [src/upgrade.ts, src/runtime/release.ts, scripts/install.sh, scripts/release.sh, crates/tode-core/src/release.rs, crates/tode-runtime/src/artifact.rs, crates/tode-runtime/src/upgrade.rs, crates/tode-cli/tests/upgrade.rs]
 scenario_ids: []
 legacy_test_paths: []
-rust_test_paths: [crates/tode-core/src/release.rs, crates/tode-runtime/src/artifact.rs]
+rust_test_paths: [crates/tode-core/src/release.rs, crates/tode-runtime/src/artifact.rs, crates/tode-runtime/src/upgrade.rs, crates/tode-cli/tests/upgrade.rs]
 platforms: [macos, linux]
 sources:
   - { id: upgrade, resource: ../../../../src/upgrade.ts, title: Current self-upgrade }
   - { id: runtime, resource: ../../../../src/runtime/release.ts, title: Verified runtime fetch }
   - { id: rust, resource: ../../../../crates/tode-core/src/release.rs, title: Rust build selection and installed receipts }
   - { id: rust-artifact, resource: ../../../../crates/tode-runtime/src/artifact.rs, title: Rust verified artifacts, safe extraction, and atomic swap }
+  - { id: rust-upgrade, resource: ../../../../crates/tode-runtime/src/upgrade.rs, title: Rust verified staged upgrade transaction }
+  - { id: rust-cli, resource: ../../../../crates/tode-cli/tests/upgrade.rs, title: Production Rust upgrade check integration }
 ---
 
 # Contract
@@ -27,4 +29,4 @@ Preserve target manifest selection, not-install/current/available/upgraded outco
 
 # Coverage Status
 
-Rust tests cover schemas/receipts plus exact streamed size/SHA verification, failed-download cleanup, safe bounded extraction, link rejection, and atomic swap rollback/restoration. C19 remains draft until the staged upgrade outcome/receipt transaction and interruption matrix are wired to the production CLI.
+Rust tests cover schemas/receipts, current/available/upgraded outcomes, production `--check`, exact download verification, failed-download preservation, safe staged extraction, VERSION/CHANNEL staging, complete swap, and old-file removal. C19 remains draft until full production upgraded-output/daemon-stop and interruption-at-every-checkpoint scenarios are certified.
