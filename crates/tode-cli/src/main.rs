@@ -35,6 +35,7 @@ struct OpenOptions {
     split: Option<String>,
     size: Option<String>,
     review: bool,
+    warnings: Vec<String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -84,7 +85,12 @@ async fn execute() -> Result<u8, String> {
             );
             Ok(0)
         }
-        CliCommand::Open(options) => open(options, &paths, &environment).await,
+        CliCommand::Open(options) => {
+            for warning in &options.warnings {
+                eprintln!("{warning}");
+            }
+            open(options, &paths, &environment).await
+        }
     }
 }
 
@@ -303,6 +309,26 @@ fn parse_command(arguments: Vec<String>) -> Result<CliCommand, String> {
             "-r" | "--reuse-window" => options.reuse = true,
             "-w" | "--wait" => options.wait = true,
             "--review" => options.review = true,
+            "--verbose"
+            | "--disable-gpu"
+            | "--disable-telemetry"
+            | "--disable-updates"
+            | "--no-sandbox"
+            | "--skip-release-notes"
+            | "--skip-welcome"
+            | "--disable-workspace-trust" => {}
+            "--log" | "--locale" | "--sync" | "--profile" | "--user-data-dir"
+            | "--extensions-dir" => {
+                if arguments.get(index + 1).is_none() {
+                    return Err(format!("{argument} needs a value"));
+                }
+                index += 1;
+            }
+            "--disable-extensions" | "--disable-extension" => {
+                options.warnings.push(format!(
+                    "tode: ignoring {argument}, extensions are per code-server, not per window"
+                ));
+            }
             "--split" | "--size" => {
                 let value = arguments
                     .get(index + 1)
@@ -471,6 +497,27 @@ mod tests {
             parse_command(vec!["--diff".into(), "a".into(), "b".into()]).unwrap(),
             CliCommand::Open(OpenOptions { diff: true, .. })
         ));
+    }
+
+    #[test]
+    fn consumes_ignored_flags_and_preserves_unsupported_warnings() {
+        let command = parse_command(vec![
+            "--verbose".into(),
+            "--locale".into(),
+            "en-US".into(),
+            "--disable-extensions".into(),
+            "folder".into(),
+        ])
+        .unwrap();
+        let CliCommand::Open(options) = command else {
+            panic!("expected open command");
+        };
+        assert_eq!(options.paths, ["folder"]);
+        assert_eq!(
+            options.warnings,
+            ["tode: ignoring --disable-extensions, extensions are per code-server, not per window"]
+        );
+        assert!(parse_command(vec!["--locale".into()]).is_err());
     }
 
     #[test]

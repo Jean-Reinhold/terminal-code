@@ -5,7 +5,7 @@ contract_id: C03
 description: Preserve accepted ignored flags and warning-only unsupported extension-isolation flags.
 tags: [cli, compatibility, flags]
 status: draft
-implementation_status: rust-parser-partial
+implementation_status: rust-parser-parity
 risk: medium
 owners: [cli]
 surfaces: [cli]
@@ -25,4 +25,4 @@ Flags in `IGNORED` and `IGNORED_WITH_VALUE` are consumed without becoming unknow
 
 # Coverage Status
 
-Rust tests cover goto/add/diff/new/reuse/wait/review/split/size parsing and invalid values. C03 remains draft until ignored VS Code flags and warning-only extension-isolation flags are ported exactly.
+Rust tests cover goto/add/diff/new/reuse/wait/review/split/size parsing, documented ignored flags, ignored flags with required values, warning-only extension-isolation flags, and invalid/missing values. C03 parser behavior is ported; black-box stdout/stderr scenario coverage is still required before stable status.

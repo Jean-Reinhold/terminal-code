@@ -41,11 +41,11 @@ sources:
 
 # Verified Behavior
 
-* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 91 contract-mapped Rust tests.
+* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 92 contract-mapped Rust tests.
 * C01 Rust help/version scenarios matched exact snapshots captured from the legacy CLI.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* One hundred five Rust workspace tests passed:
+* One hundred six Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
   - CLI help completeness and version receipt/fallback;
@@ -85,7 +85,7 @@ sources:
   - four terminal-browser layout/precedence/clone/launcher tests;
   - one release lookup/download/strip-one/unpack/launcher composition test;
   - two persistent daemon argument/readiness/SIGTERM/child/state-cleanup tests;
-  - six workbench URL, open-option parser, production new-open, IPC-reuse, daemon/browser, and shutdown tests.
+  - seven workbench URL, compatibility/open parser, production new-open, IPC-reuse, daemon/browser, and shutdown tests.
 * `cargo fmt --all` and strict Clippy with `-D warnings` passed.
 
 # Current Trust Boundary
@@ -108,4 +108,4 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Next Slice
 
-Continue M6 with ignored compatibility flags, extension management, and production import/theme/upgrade/uninstall dispatch. New-launch goto/diff/review still awaits the Rust bridge; full C14 convergence remains open.
+Continue M6 with extension management and production import/theme/upgrade/uninstall dispatch. New-launch goto/diff/review still awaits the Rust bridge; full C14 convergence remains open.
