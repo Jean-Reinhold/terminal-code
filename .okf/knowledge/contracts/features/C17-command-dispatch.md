@@ -9,10 +9,10 @@ implementation_status: rust-open-dispatch-partial
 risk: high
 owners: [cli]
 surfaces: [cli, process]
-source_paths: [src/main.ts, src/import/command.ts, src/skill.ts, src/upgrade.ts, src/uninstall.ts, crates/tode-cli/src/main.rs, crates/tode-cli/tests/extensions.rs, crates/tode-cli/tests/open.rs, crates/tode-cli/tests/profile_commands.rs, crates/tode-cli/tests/reuse.rs, crates/tode-cli/tests/uninstall.rs, crates/tode-cli/tests/upgrade.rs]
+source_paths: [src/main.ts, src/import/command.ts, src/skill.ts, src/upgrade.ts, src/uninstall.ts, crates/tode-cli/src/main.rs, crates/tode-cli/tests/extensions.rs, crates/tode-cli/tests/open.rs, crates/tode-cli/tests/profile_commands.rs, crates/tode-cli/tests/reuse.rs, crates/tode-cli/tests/timing.rs, crates/tode-cli/tests/uninstall.rs, crates/tode-cli/tests/upgrade.rs]
 scenario_ids: []
 legacy_test_paths: []
-rust_test_paths: [crates/tode-cli/src/main.rs, crates/tode-cli/tests/extensions.rs, crates/tode-cli/tests/open.rs, crates/tode-cli/tests/profile_commands.rs, crates/tode-cli/tests/reuse.rs, crates/tode-cli/tests/uninstall.rs, crates/tode-cli/tests/upgrade.rs]
+rust_test_paths: [crates/tode-cli/src/main.rs, crates/tode-cli/tests/extensions.rs, crates/tode-cli/tests/open.rs, crates/tode-cli/tests/profile_commands.rs, crates/tode-cli/tests/reuse.rs, crates/tode-cli/tests/timing.rs, crates/tode-cli/tests/uninstall.rs, crates/tode-cli/tests/upgrade.rs]
 platforms: [macos, linux]
 sources:
   - { id: main, resource: ../../../../src/main.ts, title: Top-level command dispatch }
@@ -24,6 +24,7 @@ sources:
   - { id: rust-profile, resource: ../../../../crates/tode-cli/tests/profile_commands.rs, title: Rust import and theme dispatch integration }
   - { id: rust-uninstall, resource: ../../../../crates/tode-cli/tests/uninstall.rs, title: Rust uninstall dispatch integration }
   - { id: rust-upgrade, resource: ../../../../crates/tode-cli/tests/upgrade.rs, title: Rust upgrade dispatch integration }
+  - { id: rust-timing, resource: ../../../../crates/tode-cli/tests/timing.rs, title: Rust timing dispatch integration }
 ---
 
 # Contract
@@ -32,4 +33,4 @@ Dispatch version/help/shortcut/import/theme/timing/skill/upgrade/shutdown/uninst
 
 # Coverage Status
 
-Rust tests cover help/version/shutdown, open compatibility options, extension management, import/theme/upgrade/uninstall commands, real new open, and existing-window reuse. C17 remains draft until shortcut/timing/skill dispatch is wired.
+Rust tests cover help/version/shutdown, open compatibility options, extensions, import/theme/timing/upgrade/uninstall commands, real new open, and existing-window reuse. C17 remains draft until shortcut and skill dispatch are wired.

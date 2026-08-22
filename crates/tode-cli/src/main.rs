@@ -11,9 +11,10 @@ use std::process::{Command, ExitCode, Stdio};
 use std::time::Duration;
 
 use tode_core::{
-    HELP, OpenFile, OpenRequest, ReleaseManifest, build_for, current_target_triple,
-    installed_receipt, installed_version, latest_manifest_path, parse_goto, resolve_target,
-    send_to_extension, with_fallbacks, workbench_url,
+    HELP, LaunchTiming, OpenFile, OpenRequest, PageTiming, ReleaseManifest, build_for,
+    current_target_triple, format_timing, installed_receipt, installed_version,
+    latest_manifest_path, parse_goto, resolve_target, send_to_extension, with_fallbacks,
+    workbench_url,
 };
 use tode_profile::{
     FONT_FAMILY, ProfilePaths, UninstallConfig, find_editors, install_settings, install_theme,
@@ -51,6 +52,7 @@ enum CliCommand {
     Help,
     Version,
     Shutdown,
+    Timing,
     Import(Option<String>),
     Theme(Option<String>),
     Uninstall(bool),
@@ -90,6 +92,7 @@ async fn execute() -> Result<u8, String> {
         }
         CliCommand::Import(name) => import_editor(name.as_deref(), &home, &environment, &paths),
         CliCommand::Theme(file) => set_theme(file.as_deref(), &paths),
+        CliCommand::Timing => timing_command(&paths),
         CliCommand::Uninstall(yes) => uninstall_command(yes, &home, &environment, &paths),
         CliCommand::Upgrade { check, version } => {
             upgrade_command(check, version.as_deref(), &environment, &paths).await
@@ -418,6 +421,31 @@ fn set_theme(file: Option<&str>, paths: &ProfilePaths) -> Result<u8, String> {
     Ok(0)
 }
 
+fn timing_command(paths: &ProfilePaths) -> Result<u8, String> {
+    let css = paths.data.join("inject.css");
+    let page_file = PathBuf::from(format!("{}.timing.json", css.display()));
+    let launch_file = PathBuf::from(format!("{}.launch.json", css.display()));
+    let page: PageTiming = match fs::read(&page_file)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+    {
+        Some(page) => page,
+        None => {
+            println!("no page timing recorded yet, open tode once");
+            return Ok(0);
+        }
+    };
+    let launch: Option<LaunchTiming> = fs::read(&launch_file)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok());
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or(Duration::ZERO)
+        .as_millis() as i64;
+    print!("{}", format_timing(&page, launch.as_ref(), now));
+    Ok(0)
+}
+
 fn uninstall_command(
     yes: bool,
     home: &Path,
@@ -539,6 +567,7 @@ fn parse_command(arguments: Vec<String>) -> Result<CliCommand, String> {
         [flag] if matches!(flag.as_str(), "--help" | "-h") => return Ok(CliCommand::Help),
         [flag] if matches!(flag.as_str(), "--version" | "-v") => return Ok(CliCommand::Version),
         [flag] if flag == "--shutdown" => return Ok(CliCommand::Shutdown),
+        [flag] if flag == "--timing" => return Ok(CliCommand::Timing),
         [flag, rest @ ..] if flag == "--upgrade" => {
             let mut check = false;
             let mut version = None;
@@ -753,6 +782,10 @@ mod tests {
         assert_eq!(
             parse_command(vec!["--shutdown".into()]).unwrap(),
             CliCommand::Shutdown
+        );
+        assert_eq!(
+            parse_command(vec!["--timing".into()]).unwrap(),
+            CliCommand::Timing
         );
         assert_eq!(
             parse_command(vec!["--import".into()]).unwrap(),
