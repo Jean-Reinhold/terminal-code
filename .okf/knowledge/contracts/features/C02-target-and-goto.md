@@ -5,7 +5,7 @@ contract_id: C02
 description: Preserve cwd-relative file/folder/new-file resolution and file-line-column parsing.
 tags: [cli, target, goto, paths]
 status: draft
-implementation_status: rust-snapshot-parity
+implementation_status: rust-production-parity
 risk: high
 owners: [cli]
 surfaces: [cli, filesystem]
@@ -13,6 +13,7 @@ source_paths:
   - src/target.ts
   - src/ipc.ts
   - crates/tode-core/src/target.rs
+  - crates/tode-cli/tests/open.rs
   - test/target.test.js
 scenario_ids:
   - cli.target-file
@@ -23,12 +24,14 @@ legacy_test_paths:
   - test/target.test.js
 rust_test_paths:
   - crates/tode-core/src/target.rs
+  - crates/tode-cli/tests/open.rs
 platforms: [macos, linux]
 sources:
   - { id: target, resource: ../../../../src/target.ts, title: Target resolution }
   - { id: ipc, resource: ../../../../src/ipc.ts, title: Goto parsing }
   - { id: tests, resource: ../../../../test/target.test.js, title: Existing target regression tests }
   - { id: rust, resource: ../../../../crates/tode-core/src/target.rs, title: Rust target and goto implementation }
+  - { id: rust-open, resource: ../../../../crates/tode-cli/tests/open.rs, title: Production Rust folder/goto/review/diff new-window integration }
 ---
 
 # Contract
@@ -47,4 +50,4 @@ sources:
 * [Missing-file scenario](../../../../harness/scenarios/cli/target-missing.scenario.jsonc)
 * [Goto scenario](../../../../harness/scenarios/cli/goto.scenario.jsonc)
 
-The Rust `tode-core` implementation is executed through the Rust `tode-contract-probe` binary. All four scenarios match exact snapshots captured from the legacy exports; no JavaScript test wrapper remains.
+The Rust `tode-core` implementation is executed through the Rust `tode-contract-probe` binary. All four scenarios match exact snapshots captured from the legacy exports, and the production Rust CLI test covers folder launch plus new-window goto line/column, SCM review, and diff startup markers; no JavaScript test wrapper remains.

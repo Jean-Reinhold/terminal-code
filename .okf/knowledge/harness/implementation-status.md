@@ -20,9 +20,9 @@ sources:
 
 * Root Cargo workspace pinned to Rust 1.98.0.
 * `tode-core` Rust library with CLI identity, target/goto, Unix IPC, OSC palettes, source-preserving JSONC, complete themes, shortcut transforms/decisions, and release target/manifest/receipt schemas.
-* `tode-profile` Rust crate with XDG/install ownership, managed/seeded settings, atomic writes, managed theme extension/registry/live files, full non-UI editor import, Ghostty/Kitty shortcut provider orchestration, and shortcut decision manager state.
+* `tode-profile` Rust crate with XDG/install ownership, managed/seeded settings, atomic writes, managed theme and dependency-free window bridge extensions, full non-UI editor import, Ghostty/Kitty shortcut provider orchestration, and shortcut decision manager state.
 * `tode-runtime` Rust downloaded/existing terminal-browser resolution, verified artifacts/launcher, generated Electron timing bridge, token-scoped embedded shortcut manager, and persistent managed code-server/injector daemon command.
-* Production Rust `tode` binary with help/version, compatibility/open parsing, extensions, shortcut setup/undo/TTY manager, import/theme/timing/skill/upgrade/uninstall, existing-window reuse, profile/CSS/keybindings, daemon, timed browser-bridge launch, and shutdown.
+* Production Rust `tode` binary with help/version, compatibility/open parsing, extensions, shortcut setup/undo/TTY manager, import/theme/timing/skill/upgrade/uninstall, existing-window reuse, new-window goto/review/diff startup, profile/CSS/keybindings, daemon, timed browser-bridge launch, and shutdown.
 * `tode-harness` binary/library with `catalog check`, `schema`, `run`, and `replay` commands.
 * YAML-backed OKF catalog with 22 contract concepts, draft-aware executable coverage, reciprocal scenario links, risk/owner/surface/platform/source validation, and all 119 legacy test declarations mapped.
 * Strict JSONC scenario v1 compiler and generated JSON Schema.
@@ -41,11 +41,11 @@ sources:
 
 # Verified Behavior
 
-* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 127 contract-mapped Rust tests.
+* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 129 contract-mapped Rust tests.
 * C01 Rust help/version scenarios matched exact snapshots captured from the legacy CLI.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* One hundred forty-one Rust workspace tests passed:
+* One hundred forty-three Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
   - CLI help completeness and version receipt/fallback;
@@ -82,6 +82,7 @@ sources:
   - five profile path/precedence/idempotence/atomic-install tests;
   - six import discovery/progress/settings/keybindings/snippets/tasks/extensions safety/report tests;
   - two managed theme extension/registry/live-file cleanup/idempotence tests;
+  - two dependency-free bridge install/registry/idempotence and startup-marker tests;
   - five release target/manifest/build-selection/receipt tests;
   - five verified download/extraction/link-limit/atomic-swap tests;
   - five server state/PID/readiness/dual-listener/stale-cleanup tests;
@@ -120,4 +121,4 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Next Slice
 
-Continue M5 with action documentation and full shortcut-loop/scenario translation, then M6 new-launch goto/diff/review bridge startup.
+Continue M5 with action documentation and full shortcut-loop/scenario translation, then M4/C15 generated bridge ABI and live theme fan-out certification.

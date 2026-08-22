@@ -18,6 +18,7 @@ use tode_core::{
     latest_manifest_path, parse_goto, resolve_target, send_to_extension, with_fallbacks,
     workbench_url,
 };
+use tode_profile::bridge::{install_bridge, request_startup_open};
 use tode_profile::shortcut_manager::ShortcutSession;
 use tode_profile::shortcuts::{
     TerminalKind, auto_apply_shared, detect_provider, install_shortcut_keybindings, load_decisions,
@@ -218,15 +219,46 @@ async fn open(
             return Ok(0);
         }
     }
-    if options.goto || options.diff || options.review || options.add || options.reuse {
-        return Err(
-            "goto/add/diff/review/reuse requires an existing Rust bridge window for now".into(),
-        );
+    if options.add || options.reuse {
+        return Err("add/reuse requires an existing Rust bridge window for now".into());
     }
-    if options.paths.len() > 1 {
+    if options.paths.len() > 1 && !options.goto && !options.diff {
         return Err("multiple new-window targets require the Rust bridge for now".into());
     }
-    let target = resolve_target(options.paths.first().map(String::as_str), &cwd);
+    let target = if options.goto {
+        files
+            .first()
+            .map(|file| resolve_target(Some(&file.path), &cwd))
+            .unwrap_or_else(|| resolve_target(None, &cwd))
+    } else if options.diff {
+        resolve_target(None, &cwd)
+    } else {
+        resolve_target(options.paths.first().map(String::as_str), &cwd)
+    };
+    let target_file = target
+        .file
+        .as_ref()
+        .map(|path| path.to_string_lossy().into_owned());
+    let startup_files: Vec<_> = files
+        .iter()
+        .filter(|file| {
+            file.line.is_some()
+                || target_file
+                    .as_deref()
+                    .is_none_or(|target| file.path != target)
+        })
+        .cloned()
+        .collect();
+    let startup_request =
+        (!startup_files.is_empty() || diff.is_some() || options.review).then(|| OpenRequest {
+            files: startup_files,
+            folders: Vec::new(),
+            add: false,
+            wait: Some(false),
+            diff: diff.clone(),
+            view: options.review.then(|| "scm".into()),
+            theme: None,
+        });
     let started = std::time::Instant::now();
     let mut stages = Vec::new();
     let runtime = resolve_browser_runtime(paths, environment).await?;
@@ -238,6 +270,11 @@ async fn open(
     let palette = with_fallbacks(None);
     install_settings(paths).map_err(|error| format!("install settings: {error}"))?;
     install_theme(paths, &palette).map_err(|error| format!("install theme: {error}"))?;
+    install_bridge(paths).map_err(|error| format!("install window bridge: {error}"))?;
+    if let Some(request) = startup_request.as_ref() {
+        request_startup_open(paths, request, tode_runtime::now_unix_ms())
+            .map_err(|error| format!("record startup open: {error}"))?;
+    }
     install_shortcut_keybindings(paths, load_decisions(paths).as_ref())
         .map_err(|error| format!("install keybindings: {error}"))?;
     if let Some(home) = environment.get(&OsString::from("HOME")).map(PathBuf::from)

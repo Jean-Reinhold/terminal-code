@@ -94,6 +94,78 @@ fn opens_folder_through_rust_daemon_and_browser_then_shuts_down() {
     assert_eq!(launch["stages"][1][0], "profile");
     assert_eq!(launch["stages"][2][0], "code-server");
 
+    let bridge = root
+        .path()
+        .join("data/tode/vscode/extensions/tode.tode-bridge-1.5.1");
+    assert!(bridge.join("package.json").is_file());
+    assert!(
+        fs::read_to_string(bridge.join("extension.js"))
+            .unwrap()
+            .contains("module.exports.activate = activate")
+    );
+
+    let source = workspace.join("source.rs");
+    fs::write(&source, "fn main() {}\n").unwrap();
+    let goto = base_command(
+        &target,
+        root.path(),
+        &install,
+        &daemon,
+        &code_server,
+        &browser_args,
+    )
+    .current_dir(&workspace)
+    .args(["--new-window", "--goto", "--review", "source.rs:12:4"])
+    .output()
+    .unwrap();
+    assert!(
+        goto.status.success(),
+        "{}",
+        String::from_utf8_lossy(&goto.stderr)
+    );
+    let marker_file = root.path().join("data/tode/startup-open.json");
+    let marker: serde_json::Value =
+        serde_json::from_slice(&fs::read(&marker_file).unwrap()).unwrap();
+    assert_eq!(
+        marker["files"][0]["path"],
+        source.canonicalize().unwrap().to_string_lossy().as_ref()
+    );
+    assert_eq!(marker["files"][0]["line"], 12);
+    assert_eq!(marker["files"][0]["column"], 4);
+    assert_eq!(marker["view"], "scm");
+
+    let left = workspace.join("left.rs");
+    let right = workspace.join("right.rs");
+    fs::write(&left, "left\n").unwrap();
+    fs::write(&right, "right\n").unwrap();
+    let diff = base_command(
+        &target,
+        root.path(),
+        &install,
+        &daemon,
+        &code_server,
+        &browser_args,
+    )
+    .current_dir(&workspace)
+    .args(["--new-window", "--diff", "left.rs", "right.rs"])
+    .output()
+    .unwrap();
+    assert!(
+        diff.status.success(),
+        "{}",
+        String::from_utf8_lossy(&diff.stderr)
+    );
+    let marker: serde_json::Value =
+        serde_json::from_slice(&fs::read(marker_file).unwrap()).unwrap();
+    assert_eq!(
+        marker["diff"][0],
+        left.canonicalize().unwrap().to_string_lossy().as_ref()
+    );
+    assert_eq!(
+        marker["diff"][1],
+        right.canonicalize().unwrap().to_string_lossy().as_ref()
+    );
+
     let shutdown = base_command(
         &target,
         root.path(),
