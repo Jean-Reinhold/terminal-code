@@ -41,11 +41,11 @@ sources:
 
 # Verified Behavior
 
-* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 134 contract-mapped Rust tests.
+* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 135 contract-mapped Rust tests.
 * C01 Rust help/version scenarios matched exact snapshots captured from the legacy CLI.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* One hundred forty-eight Rust workspace tests passed:
+* One hundred forty-nine Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
   - CLI help completeness and version receipt/fallback;
@@ -87,8 +87,7 @@ sources:
   - five release target/manifest/build-selection/receipt tests;
   - five verified download/extraction/link-limit/atomic-swap tests;
   - five server state/PID/readiness/dual-listener/stale-cleanup tests;
-  - two exact code-server command/environment and managed spawn/readiness/shutdown integration tests;
-  - eight terminal-browser layout/precedence/clone/launcher and generated timing/live-theme bridge tests;
+  - nine terminal-browser layout/precedence/clone/launcher and generated timing/live-theme/fan-out bridge tests;
   - one production raw-terminal-colors to full Rust theme helper command test;
   - one release lookup/download/strip-one/unpack/launcher composition test;
   - two persistent daemon argument/readiness/SIGTERM/child/state-cleanup tests;
@@ -122,4 +121,4 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Next Slice
 
-Continue M4/C15 generated host ABI and real multi-socket fan-out certification, then executable scenarios for remaining contracts.
+Continue M4/C15 automated real terminal theme-change certification, then executable scenarios for remaining contracts.

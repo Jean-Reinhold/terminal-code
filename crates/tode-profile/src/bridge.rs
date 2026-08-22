@@ -116,6 +116,7 @@ fn bridge_source(paths: &ProfilePaths) -> String {
         "liveThemeFile": paths.data.join("live-theme.json"),
         "quitHint": "Use the terminal pane's quit command to close terminal-code.",
         "startupOpenFile": startup_open_file(paths),
+        "socketDir": paths.state.join("ipc"),
     }))
     .expect("bridge context serializes");
     [
@@ -131,7 +132,6 @@ fn bridge_source(paths: &ProfilePaths) -> String {
 const BRIDGE_BODY: &str = r#"
 const fs = require("fs");
 const net = require("net");
-const os = require("os");
 const path = require("path");
 const vscode = require("vscode");
 const NL = String.fromCharCode(10);
@@ -185,11 +185,8 @@ function watchLiveTheme() {
 }
 
 function socketPath() {
-  const stateHome = process.env.XDG_STATE_HOME && path.isAbsolute(process.env.XDG_STATE_HOME)
-    ? process.env.XDG_STATE_HOME : path.join(os.homedir(), ".local", "state");
-  const dir = path.join(stateHome, "tode", "ipc");
-  fs.mkdirSync(dir, { recursive: true });
-  return path.join(dir, `w${process.pid}-${Date.now()}.sock`);
+  fs.mkdirSync(ctx.socketDir, { recursive: true });
+  return path.join(ctx.socketDir, `w${process.pid}-${Date.now()}.sock`);
 }
 
 function workspaceUri(target) {

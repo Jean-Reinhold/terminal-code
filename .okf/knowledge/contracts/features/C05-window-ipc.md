@@ -5,7 +5,7 @@ contract_id: C05
 description: Preserve TODE_IPC Unix-socket discovery, JSON-line framing, replies, timeouts, and wait behavior.
 tags: [ipc, unix-socket, cli, wait]
 status: draft
-implementation_status: rust-production-client-server
+implementation_status: rust-production-parity
 risk: critical
 owners: [protocol, cli]
 surfaces: [unix-socket, cli, process]
@@ -38,4 +38,4 @@ Use `TODE_IPC` only when it names a socket. Send one UTF-8 JSON request plus new
 
 # Coverage Status
 
-Four harness scenarios and Rust integration/unit tests cover production goto/wait/review reuse, framing, omitted fields, success, refusal, unreadable reply, bounded timeout, unbounded wait, missing sockets, generated server activation, TODE_IPC export, request replies, and socket cleanup source. C05 remains draft pending generated-host-adapter ABI execution against real code-server.
+Four harness scenarios and Rust integration/unit tests cover production goto/wait/review reuse, framing, omitted fields, success, refusal, unreadable reply, bounded timeout, unbounded wait, missing sockets, generated server activation, TODE_IPC export, request replies, and socket cleanup. The generated extension was activated eagerly by real code-server; `lsof` observed its authoritative Unix listener, production `tode --goto --review abi.rs:3:2` received `{ok:true}`, and Chrome observed `abi.rs`, Source Control selected, and `Ln 3, Col 2`.

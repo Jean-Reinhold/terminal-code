@@ -1,10 +1,14 @@
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use serde::Deserialize;
 use tempfile::NamedTempFile;
-use tode_core::{GeneratedTheme, LaunchTiming, ParsedReplies, Rgb, generate_theme, with_fallbacks};
+use tode_core::{
+    GeneratedTheme, IpcError, LaunchTiming, OpenRequest, ParsedReplies, Rgb, generate_theme,
+    send_to_extension, with_fallbacks,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrowserScripts {
@@ -33,6 +37,59 @@ pub fn theme_from_raw(source: &str) -> Result<GeneratedTheme, String> {
         ansi: std::array::from_fn(|index| raw.ansi.get(index).copied().flatten()),
     };
     Ok(generate_theme(&with_fallbacks(Some(&parsed))))
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ThemeFanoutReport {
+    pub sent: usize,
+    pub removed: usize,
+    pub failed: usize,
+}
+
+pub fn fanout_theme(
+    socket_dir: &Path,
+    theme: &GeneratedTheme,
+    timeout: Duration,
+) -> io::Result<ThemeFanoutReport> {
+    let entries = match fs::read_dir(socket_dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Ok(ThemeFanoutReport::default());
+        }
+        Err(error) => return Err(error),
+    };
+    let mut sockets: Vec<_> = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "sock")
+        })
+        .collect();
+    sockets.sort();
+    let request = OpenRequest {
+        files: Vec::new(),
+        folders: Vec::new(),
+        add: false,
+        wait: Some(false),
+        diff: None,
+        view: None,
+        theme: Some(serde_json::to_value(theme).expect("generated theme serializes")),
+    };
+    let mut report = ThemeFanoutReport::default();
+    for socket in sockets {
+        match send_to_extension(&socket, &request, Some(timeout)) {
+            Ok(()) => report.sent += 1,
+            Err(IpcError::Io(_) | IpcError::Refused(_)) => match fs::remove_file(&socket) {
+                Ok(()) => report.removed += 1,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    report.removed += 1;
+                }
+                Err(_) => report.failed += 1,
+            },
+            Err(_) => report.failed += 1,
+        }
+    }
+    Ok(report)
 }
 
 const PRELOAD_SOURCE: &str = r#""use strict";
@@ -116,34 +173,8 @@ pub fn write_browser_scripts(
 
 const MAIN_SOURCE: &str = r#"
 const fs = require("node:fs");
-const net = require("node:net");
-const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { ipcMain } = require("electron");
-const NL = String.fromCharCode(10);
-
-function remove(socket) {
-  try { fs.rmSync(socket, { force: true }); } catch {}
-}
-
-function send(socket, request) {
-  const connection = net.createConnection(socket);
-  let buffer = "";
-  connection.on("connect", () => connection.end(JSON.stringify(request) + NL));
-  connection.on("data", chunk => {
-    buffer += chunk.toString("utf8");
-    const newline = buffer.indexOf(NL);
-    if (newline < 0) return;
-    try {
-      const reply = JSON.parse(buffer.slice(0, newline));
-      if (!reply || reply.ok !== true) remove(socket);
-    } catch { remove(socket); }
-    connection.destroy();
-  });
-  connection.on("error", error => {
-    if (error && (error.code === "ENOENT" || error.code === "ECONNREFUSED")) remove(socket);
-  });
-}
 
 ipcMain.on("tode:message", (_event, message) => {
   if (message && message.type === "timing" && message.page) {
@@ -151,22 +182,13 @@ ipcMain.on("tode:message", (_event, message) => {
     return;
   }
   if (!message || message.type !== "theme" || !message.colors) return;
-  let theme;
   try {
-    theme = JSON.parse(execFileSync(ctx.themeHelper, [], {
+    execFileSync(ctx.themeHelper, ["--socket-dir", ctx.socketDir], {
       input: JSON.stringify(message.colors),
       encoding: "utf8",
       maxBuffer: 4194304,
-    }));
-  } catch { return; }
-  let names;
-  try { names = fs.readdirSync(ctx.socketDir); } catch { return; }
-  for (const name of names) {
-    if (!name.endsWith(".sock")) continue;
-    send(path.join(ctx.socketDir, name), {
-      files: [], folders: [], add: false, wait: false, theme,
     });
-  }
+  } catch {}
 });
 "#;
 
@@ -207,7 +229,23 @@ fn write_atomic(path: &Path, contents: &[u8]) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{BufRead, BufReader, Write};
+    use std::os::unix::net::UnixListener;
+    use std::thread;
     use tempfile::TempDir;
+
+    fn start_peer(path: &Path, reply: &'static [u8]) -> thread::JoinHandle<serde_json::Value> {
+        let listener = UnixListener::bind(path).unwrap();
+        thread::spawn(move || {
+            let (mut connection, _) = listener.accept().unwrap();
+            let mut line = String::new();
+            BufReader::new(connection.try_clone().unwrap())
+                .read_line(&mut line)
+                .unwrap();
+            connection.write_all(reply).unwrap();
+            serde_json::from_str(line.trim()).unwrap()
+        })
+    }
 
     #[test]
     fn writes_top_frame_timing_and_theme_bridge_with_escaped_paths() {
@@ -244,6 +282,43 @@ mod tests {
     fn raw_terminal_colors_require_background_and_foreground() {
         assert!(theme_from_raw(r#"{"foreground":[1,2,3]}"#).is_err());
         assert!(theme_from_raw("not json").is_err());
+    }
+
+    #[test]
+    fn fans_theme_to_live_peers_and_removes_refused_and_dead_sockets() {
+        let root = TempDir::new().unwrap();
+        let sockets = root.path().join("sockets");
+        fs::create_dir(&sockets).unwrap();
+        let live_path = sockets.join("a-live.sock");
+        let refused_path = sockets.join("b-refused.sock");
+        let dead_path = sockets.join("c-dead.sock");
+        let live = start_peer(&live_path, b"{\"ok\":true}\n");
+        let refused = start_peer(&refused_path, b"{\"ok\":false,\"error\":\"refused\"}\n");
+        drop(UnixListener::bind(&dead_path).unwrap());
+        let theme =
+            theme_from_raw(r#"{"background":[1,2,3],"foreground":[240,241,242],"ansi":[]}"#)
+                .unwrap();
+        let report = fanout_theme(&sockets, &theme, Duration::from_secs(1)).unwrap();
+        assert_eq!(
+            report,
+            ThemeFanoutReport {
+                sent: 1,
+                removed: 2,
+                failed: 0,
+            }
+        );
+        let live_request = live.join().unwrap();
+        let refused_request = refused.join().unwrap();
+        assert_eq!(
+            live_request["theme"]["colors"]["editor.background"],
+            "#010203"
+        );
+        assert_eq!(
+            refused_request["theme"]["colors"]["editor.background"],
+            "#010203"
+        );
+        assert!(!refused_path.exists());
+        assert!(!dead_path.exists());
     }
 
     #[test]

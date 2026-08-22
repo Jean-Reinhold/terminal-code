@@ -5,7 +5,7 @@ contract_id: C10
 description: Preserve palette-derived theme colors, contrast, fingerprints, CSS, font, extension, and live application.
 tags: [theme, color, css, font, browser]
 status: draft
-implementation_status: rust-live-theme-helper-partial
+implementation_status: rust-live-theme-production-partial
 risk: high
 owners: [theme, profile]
 surfaces: [filesystem, browser, socket]
@@ -32,4 +32,4 @@ Preserve dark/light classification, exact editor/ANSI colors, hue-based semantic
 
 # Coverage Status
 
-Rust color/theme/profile tests plus production CLI/helper integration cover generation, extension/registry/live files, cleanup, idempotence, `--theme` output, raw terminal color validation/fallbacks, full-theme helper output, preload theme capture, and generated multi-socket host fan-out/removal source. C10 remains draft until the generated Electron adapter is executed against real terminal-browser windows.
+Rust color/theme/profile tests plus production CLI/helper integration cover generation, extension/registry/live files, cleanup, idempotence, `--theme` output, raw terminal color validation/fallbacks, full-theme helper output, preload theme capture, and Rust multi-socket success/refusal/stale-peer fan-out. The generated Electron adapter invokes only the Rust helper—no duplicate JavaScript theme logic. C10 remains draft until an actual terminal theme-change event is driven through terminal-browser.

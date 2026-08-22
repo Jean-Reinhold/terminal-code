@@ -5,7 +5,7 @@ contract_id: C15
 description: Preserve one-shot startup requests, live theme persistence/fan-out, dead-socket cleanup, and bridge activation.
 tags: [bridge, live-sync, socket, startup]
 status: draft
-implementation_status: rust-live-bridge-partial
+implementation_status: rust-production-host-partial
 risk: high
 owners: [protocol, browser]
 surfaces: [filesystem, unix-socket, browser]
@@ -30,4 +30,4 @@ Consume startup open/view/diff state exactly once, apply persisted live theme on
 
 # Coverage Status
 
-Rust tests cover idempotent bridge installation, fresh one-shot startup markers, production folder/goto/review/diff launches, terminal raw-color validation/fallbacks, full Rust theme helper output, generated Electron capture, multi-socket JSON-line fan-out, and refused/dead socket removal source. C15 remains draft until generated-host ABI and multi-socket fan-out are executed against real terminal-browser/code-server windows.
+Rust tests cover idempotent bridge installation, fresh one-shot startup markers, production folder/goto/review/diff launches, raw-color validation/fallbacks, full Rust theme generation, generated Electron capture/helper invocation, real multi-socket JSON-line success/refusal/stale removal, and production helper fan-out. Real code-server eagerly activated the generated extension; its authoritative Unix listener was observed, production goto+review received success, and Chrome confirmed file/SCM/line/column state. C15 remains draft only until a real terminal theme-change event is driven through terminal-browser and automated as a harness scenario.
