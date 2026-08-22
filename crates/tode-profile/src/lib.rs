@@ -1,4 +1,5 @@
 pub mod import;
+pub mod shortcut_manager;
 pub mod shortcuts;
 pub mod uninstall;
 

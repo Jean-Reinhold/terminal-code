@@ -75,6 +75,7 @@ pub struct ImportedConflict {
 pub struct ShortcutScan {
     pub terminal: Vec<ShortcutConflict>,
     pub imported: Vec<ImportedConflict>,
+    pub occupied: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -246,13 +247,14 @@ pub fn scan_shortcuts(
 ) -> Result<ShortcutScan, ShortcutError> {
     let holders = editor_holders(paths);
     let decisions = load_decisions(paths);
-    let terminal = match provider.kind {
+    let (terminal, occupied) = match provider.kind {
         TerminalKind::Ghostty => scan_ghostty(provider, &holders, decisions.as_ref())?,
         TerminalKind::Kitty => scan_kitty(provider, &holders, decisions.as_ref())?,
     };
     Ok(ShortcutScan {
         terminal,
         imported: imported_conflicts(paths, &holders),
+        occupied,
     })
 }
 
@@ -427,7 +429,7 @@ pub fn install_shortcut_keybindings(
     Ok(write_if_changed(&file, &output)?)
 }
 
-fn generated_bindings(decisions: Option<&Decisions>) -> Vec<Binding> {
+pub(crate) fn generated_bindings(decisions: Option<&Decisions>) -> Vec<Binding> {
     let mut mine = quit_bindings(decisions, cfg!(target_os = "macos"));
     mine.extend(hint_bindings(cfg!(target_os = "macos")));
     mine.extend(fallback_bindings(decisions));
@@ -445,11 +447,12 @@ fn scan_ghostty(
     provider: &TerminalProvider,
     holders: &BTreeMap<String, Vec<EditorHold>>,
     decisions: Option<&Decisions>,
-) -> Result<Vec<ShortcutConflict>, ShortcutError> {
+) -> Result<(Vec<ShortcutConflict>, BTreeMap<String, String>), ShortcutError> {
     let output = run(&provider.binary, &["+list-keybinds"])?;
     let freed = ghostty_freed(&provider.config_dir);
     let mut seen = BTreeSet::new();
     let mut conflicts = Vec::new();
+    let mut occupied = BTreeMap::new();
     for line in output.lines() {
         let Some(rest) = line.trim().strip_prefix("keybind") else {
             continue;
@@ -465,6 +468,11 @@ fn scan_ghostty(
             continue;
         }
         let effective = (!freed.contains(&parsed.trigger)).then_some(action.to_owned());
+        if let (Some(chord), Some(action)) =
+            (ghostty_from_trigger(&parsed.trigger), effective.as_ref())
+        {
+            occupied.insert(chord, action.clone());
+        }
         consider_ghostty(
             &parsed.trigger,
             effective,
@@ -484,7 +492,7 @@ fn scan_ghostty(
             &mut conflicts,
         );
     }
-    Ok(conflicts)
+    Ok((conflicts, occupied))
 }
 
 fn consider_ghostty(
@@ -532,18 +540,28 @@ fn scan_kitty(
     provider: &TerminalProvider,
     holders: &BTreeMap<String, Vec<EditorHold>>,
     decisions: Option<&Decisions>,
-) -> Result<Vec<ShortcutConflict>, ShortcutError> {
+) -> Result<(Vec<ShortcutConflict>, BTreeMap<String, String>), ShortcutError> {
     let output = run(&provider.binary, &["+runpy", KITTY_DUMP_SCRIPT])?;
     let keymap: KittyKeymap = serde_json::from_str(&output)
         .map_err(|error| ShortcutError::Parse("kitty", error.to_string()))?;
     let freed = kitty_freed(&provider.config_dir);
     let mut seen = BTreeSet::new();
     let mut conflicts = Vec::new();
+    let mut occupied = BTreeMap::new();
     for binding in &keymap.binds {
         if binding.action.as_deref().is_some_and(kitty_harmless) {
             continue;
         }
         let effective = (!freed.contains(&binding.trigger)).then_some(binding);
+        if let (Some(chord), Some(binding)) = (kitty_from_trigger(&binding.trigger), effective) {
+            occupied.insert(
+                chord,
+                binding
+                    .action
+                    .clone()
+                    .unwrap_or_else(|| "key sequence".into()),
+            );
+        }
         consider_kitty(
             &binding.trigger,
             effective,
@@ -565,7 +583,7 @@ fn scan_kitty(
             &mut conflicts,
         );
     }
-    Ok(conflicts)
+    Ok((conflicts, occupied))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -652,7 +670,7 @@ fn consider_kitty(
     });
 }
 
-fn editor_holders(paths: &ProfilePaths) -> BTreeMap<String, Vec<EditorHold>> {
+pub(crate) fn editor_holders(paths: &ProfilePaths) -> BTreeMap<String, Vec<EditorHold>> {
     let decisions = load_decisions(paths);
     let mine = generated_bindings(decisions.as_ref());
     let previous = read_bindings(&paths.data.join("keybindings.tode.json"));
@@ -1094,7 +1112,7 @@ fn lower_first(value: &str) -> String {
     })
 }
 
-fn words(value: &str) -> String {
+pub(crate) fn words(value: &str) -> String {
     let mut output = String::new();
     let mut previous_lower = false;
     for character in value.replace(['_', '.', ':'], " ").chars() {
