@@ -2,6 +2,7 @@ pub mod artifact;
 pub mod browser;
 pub mod browser_bridge;
 pub mod daemon;
+pub mod import_manager;
 pub mod injector;
 pub mod process;
 pub mod shortcut_manager;
@@ -17,6 +18,7 @@ pub use browser::{
 };
 pub use browser_bridge::{BrowserScripts, write_browser_scripts, write_launch_timing};
 pub use daemon::{Daemon, DaemonConfig, DaemonError};
+pub use import_manager::{ImportManager, ImportReportRow, report_rows};
 pub use injector::{FONT_ROUTE, Injector, InjectorConfig, injected_css};
 pub use process::{
     CodeServerConfig, ManagedCodeServer, ManagedProcessError, ServerState, answering,

@@ -25,6 +25,15 @@ fn imports_discovered_editor_and_installs_theme() {
     fs::write(source_extensions.join("extensions.json"), "[]").unwrap();
 
     let binary = env!("CARGO_BIN_EXE_tode");
+    let listed = base(binary, root.path(), &home)
+        .arg("--import")
+        .output()
+        .unwrap();
+    assert!(listed.status.success());
+    let listed = String::from_utf8(listed.stdout).unwrap();
+    assert!(listed.contains("Code"));
+    assert!(listed.contains("run tode --import <name>"));
+
     let imported = base(binary, root.path(), &home)
         .args(["--import", "Code"])
         .output()
@@ -47,6 +56,15 @@ fn imports_discovered_editor_and_installs_theme() {
     assert_eq!(
         tode_core::read_key(&settings, "workbench.colorTheme"),
         Some(serde_json::json!("Terminal Code"))
+    );
+    assert!(
+        fs::read_dir(root.path().join("data/tode/vscode/extensions"))
+            .unwrap()
+            .flatten()
+            .any(|entry| entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("tode.tode-theme-"))
     );
 
     let themed = base(binary, root.path(), &home)

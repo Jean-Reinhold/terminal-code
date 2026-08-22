@@ -327,7 +327,7 @@ async fn handle(
     Ok(response)
 }
 
-fn manager_token() -> std::io::Result<String> {
+pub(crate) fn manager_token() -> std::io::Result<String> {
     let mut bytes = [0_u8; 16];
     File::open("/dev/urandom")?.read_exact(&mut bytes)?;
     Ok(hex::encode(bytes))

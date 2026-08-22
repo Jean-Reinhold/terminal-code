@@ -25,11 +25,11 @@ use tode_profile::shortcuts::{
     provider_readiness, reload_provider, scan_shortcuts, undo_shortcuts,
 };
 use tode_profile::{
-    FONT_FAMILY, ProfilePaths, UninstallConfig, find_editors, install_settings, install_theme,
-    install_theme_value, run_import, uninstall, write_if_changed,
+    FONT_FAMILY, ProfilePaths, UninstallConfig, describe, find_editors, install_settings,
+    install_theme, install_theme_value, run_import, summarise, uninstall, write_if_changed,
 };
 use tode_runtime::{
-    BrowserHomes, BrowserRuntime, RuntimeRoots, ServerState, ShortcutManager,
+    BrowserHomes, BrowserRuntime, ImportManager, RuntimeRoots, ServerState, ShortcutManager,
     ShortcutManagerConfig, UpgradeOutcome, apply_build, current_server, injected_css,
     resolve_runtime, stop_server, write_browser_scripts, write_launch_timing,
 };
@@ -105,7 +105,9 @@ async fn execute() -> Result<u8, String> {
             println!("{}", installed_version(&paths.install_root));
             Ok(0)
         }
-        CliCommand::Import(name) => import_editor(name.as_deref(), &home, &environment, &paths),
+        CliCommand::Import(name) => {
+            import_command(name.as_deref(), &home, &environment, &paths).await
+        }
         CliCommand::Theme(file) => set_theme(file.as_deref(), &paths),
         CliCommand::Timing => timing_command(&paths),
         CliCommand::Skill => {
@@ -494,6 +496,58 @@ fn manage_extensions(
     Ok(0)
 }
 
+async fn import_command(
+    name: Option<&str>,
+    home: &Path,
+    environment: &BTreeMap<OsString, OsString>,
+    paths: &ProfilePaths,
+) -> Result<u8, String> {
+    if name.is_some() {
+        return import_editor(name, home, environment, paths);
+    }
+    let xdg = environment
+        .get(&OsString::from("XDG_CONFIG_HOME"))
+        .map(PathBuf::from);
+    let editors = find_editors(home, xdg.as_deref(), cfg!(target_os = "macos"));
+    if editors.is_empty() {
+        println!("no vscode-family editors found on this machine");
+        return Ok(0);
+    }
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        for editor in &editors {
+            println!("  {}  {}", editor.name, summarise(&describe(editor)));
+        }
+        println!("\nrun tode --import <name>, or run this command inside a terminal");
+        return Ok(0);
+    }
+    let mut manager = ImportManager::start(editors, paths.clone())
+        .await
+        .map_err(|error| format!("start import manager: {error}"))?;
+    let runtime = resolve_browser_runtime(paths, environment).await?;
+    let manager_url = manager.url();
+    let mut child = tokio::process::Command::new(&runtime.bin)
+        .args(["open", manager_url.as_str(), "--app-mode"])
+        .spawn()
+        .map_err(|error| format!("could not start terminal-browser: {error}"))?;
+    let status = tokio::select! {
+        () = manager.wait_done() => {
+            let _ = child.kill().await;
+            child.wait().await
+        }
+        status = child.wait() => status,
+    }
+    .map_err(|error| format!("wait for terminal-browser: {error}"))?;
+    let served = manager.served();
+    manager.close().await;
+    let code = status.code().unwrap_or(0).clamp(0, 255) as u8;
+    if !served {
+        eprintln!(
+            "tode: the import page never reached the screen (terminal-browser exited {code})"
+        );
+    }
+    Ok(code)
+}
+
 fn import_editor(
     name: Option<&str>,
     home: &Path,
@@ -515,6 +569,8 @@ fn import_editor(
         None => "no compatible editor found".into(),
     })?;
     let report = run_import(editor, paths);
+    install_theme(paths, &with_fallbacks(None))
+        .map_err(|error| format!("install managed theme after import: {error}"))?;
     println!(
         "{}",
         serde_json::to_string_pretty(&report).expect("import report serializes")
