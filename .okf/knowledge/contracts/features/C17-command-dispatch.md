@@ -9,10 +9,10 @@ implementation_status: rust-open-dispatch-partial
 risk: high
 owners: [cli]
 surfaces: [cli, process]
-source_paths: [src/main.ts, src/import/command.ts, src/skill.ts, src/upgrade.ts, src/uninstall.ts, crates/tode-cli/src/main.rs, crates/tode-cli/tests/extensions.rs, crates/tode-cli/tests/open.rs, crates/tode-cli/tests/profile_commands.rs, crates/tode-cli/tests/reuse.rs]
+source_paths: [src/main.ts, src/import/command.ts, src/skill.ts, src/upgrade.ts, src/uninstall.ts, crates/tode-cli/src/main.rs, crates/tode-cli/tests/extensions.rs, crates/tode-cli/tests/open.rs, crates/tode-cli/tests/profile_commands.rs, crates/tode-cli/tests/reuse.rs, crates/tode-cli/tests/uninstall.rs]
 scenario_ids: []
 legacy_test_paths: []
-rust_test_paths: [crates/tode-cli/src/main.rs, crates/tode-cli/tests/extensions.rs, crates/tode-cli/tests/open.rs, crates/tode-cli/tests/profile_commands.rs, crates/tode-cli/tests/reuse.rs]
+rust_test_paths: [crates/tode-cli/src/main.rs, crates/tode-cli/tests/extensions.rs, crates/tode-cli/tests/open.rs, crates/tode-cli/tests/profile_commands.rs, crates/tode-cli/tests/reuse.rs, crates/tode-cli/tests/uninstall.rs]
 platforms: [macos, linux]
 sources:
   - { id: main, resource: ../../../../src/main.ts, title: Top-level command dispatch }
@@ -22,6 +22,7 @@ sources:
   - { id: rust-reuse, resource: ../../../../crates/tode-cli/tests/reuse.rs, title: Rust existing-window dispatch integration }
   - { id: rust-extensions, resource: ../../../../crates/tode-cli/tests/extensions.rs, title: Rust extension command integration }
   - { id: rust-profile, resource: ../../../../crates/tode-cli/tests/profile_commands.rs, title: Rust import and theme dispatch integration }
+  - { id: rust-uninstall, resource: ../../../../crates/tode-cli/tests/uninstall.rs, title: Rust uninstall dispatch integration }
 ---
 
 # Contract
@@ -30,4 +31,4 @@ Dispatch version/help/shortcut/import/theme/timing/skill/upgrade/shutdown/uninst
 
 # Coverage Status
 
-Rust tests cover help/version/shutdown, open compatibility options, extension management, import/theme commands, real new open, and existing-window reuse. C17 remains draft until shortcut/timing/skill/upgrade/uninstall dispatch is wired.
+Rust tests cover help/version/shutdown, open compatibility options, extension management, import/theme/uninstall commands, real new open, and existing-window reuse. C17 remains draft until shortcut/timing/skill/upgrade dispatch is wired.

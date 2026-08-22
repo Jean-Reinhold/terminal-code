@@ -37,3 +37,4 @@
 * **M6 compatibility flags**: Ported documented ignored flags, value-consuming ignored options, warning-only extension-isolation flags, and strict invalid/missing-value handling.
 * **M6 extension management**: Added Rust install/uninstall/list/show-versions parsing, uninstall-first execution, managed profile paths, exit propagation, and Bash-fixture integration.
 * **M6 import/theme commands**: Wired production Rust editor discovery/import reports and managed theme installation/fingerprint output with end-to-end profile integration.
+* **M6 uninstall**: Added safe Rust owned-path/font/shim/terminal-config uninstall service and production `--uninstall --yes` integration with unrelated-data protection.

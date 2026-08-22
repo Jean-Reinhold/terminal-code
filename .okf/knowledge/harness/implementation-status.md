@@ -22,7 +22,7 @@ sources:
 * `tode-core` Rust library with CLI identity, target/goto, Unix IPC, OSC palettes, source-preserving JSONC, complete themes, shortcut transforms/decisions, and release target/manifest/receipt schemas.
 * `tode-profile` Rust crate with XDG/install ownership, managed/seeded settings, atomic writes, managed theme extension/registry/live files, and full non-UI editor import.
 * `tode-runtime` Rust downloaded/existing terminal-browser resolution, verified artifacts/launcher, and persistent managed code-server/injector daemon command.
-* Production Rust `tode` binary with help/version, compatibility/open parsing, extension management, import/theme commands, existing-window reuse, profile/CSS, daemon, browser launch, and shutdown.
+* Production Rust `tode` binary with help/version, compatibility/open parsing, extensions, import/theme/uninstall, existing-window reuse, profile/CSS, daemon, browser launch, and shutdown.
 * `tode-harness` binary/library with `catalog check`, `schema`, `run`, and `replay` commands.
 * YAML-backed OKF catalog with 22 contract concepts, draft-aware executable coverage, reciprocal scenario links, risk/owner/surface/platform/source validation, and all 119 legacy test declarations mapped.
 * Strict JSONC scenario v1 compiler and generated JSON Schema.
@@ -41,11 +41,11 @@ sources:
 
 # Verified Behavior
 
-* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 95 contract-mapped Rust tests.
+* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 99 contract-mapped Rust tests.
 * C01 Rust help/version scenarios matched exact snapshots captured from the legacy CLI.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* One hundred nine Rust workspace tests passed:
+* One hundred thirteen Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
   - CLI help completeness and version receipt/fallback;
@@ -87,7 +87,8 @@ sources:
   - two persistent daemon argument/readiness/SIGTERM/child/state-cleanup tests;
   - seven workbench URL, compatibility/open parser, production new-open, IPC-reuse, daemon/browser, and shutdown tests;
   - two extension parser/order/profile/list/output integration tests;
-  - one production editor discovery/import and theme installation integration test.
+  - one production editor discovery/import and theme installation integration test;
+  - four safe uninstall service/production integration tests.
 * `cargo fmt --all` and strict Clippy with `-D warnings` passed.
 
 # Current Trust Boundary
@@ -101,7 +102,7 @@ Network policy in scenario v1 is only `not-required`. The S1 runner does not cla
 Execution policy v1 rejects declared retries rather than ignoring them. Classified retry/resumption remains H6 work.
 
 # Not Implemented Yet
-* Remaining shortcut/timing/skill/upgrade/uninstall commands and direct dual-target differential execution; basic open/reuse/extensions/import/theme/shutdown work.
+* Remaining shortcut/timing/skill/upgrade commands and direct dual-target differential execution; open/reuse/extensions/import/theme/uninstall/shutdown work.
 * Executable scenarios for C03-C04 and C06-C22; their concepts and legacy test mappings are complete.
 * PTY/OSC, browser, terminal hardware, release/R2, and install scenario adapters.
 * Hard S2/S3 isolation, total resource budgets, fault injection, and crash resumption.
@@ -110,4 +111,4 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Next Slice
 
-Continue M6 with production upgrade/uninstall and shortcut command dispatch. New-launch goto/diff/review still awaits the Rust bridge; full C14 convergence remains open.
+Continue M6/M7 with verified upgrade outcomes and production upgrade dispatch, then shortcut command wiring. New-launch goto/diff/review still awaits the Rust bridge.

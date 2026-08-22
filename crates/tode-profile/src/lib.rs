@@ -1,9 +1,11 @@
 pub mod import;
+pub mod uninstall;
 
 pub use import::{
     Editor, EditorContents, ExtensionsReport, ImportReport, SettingsReport, SkippedExtension,
     describe, find_editors, run_import, run_import_with_progress, summarise,
 };
+pub use uninstall::{UninstallConfig, UninstallReport, uninstall};
 
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};

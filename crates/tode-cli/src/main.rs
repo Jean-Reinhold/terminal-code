@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::env;
 use std::ffi::OsString;
 use std::fs;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, IsTerminal, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
 use std::os::unix::fs::FileTypeExt;
 use std::os::unix::process::CommandExt;
@@ -15,8 +15,8 @@ use tode_core::{
     with_fallbacks, workbench_url,
 };
 use tode_profile::{
-    FONT_FAMILY, ProfilePaths, find_editors, install_settings, install_theme, run_import,
-    write_if_changed,
+    FONT_FAMILY, ProfilePaths, UninstallConfig, find_editors, install_settings, install_theme,
+    run_import, uninstall, write_if_changed,
 };
 use tode_runtime::{
     BrowserHomes, RuntimeRoots, ServerState, current_server, injected_css, resolve_runtime,
@@ -52,6 +52,7 @@ enum CliCommand {
     Shutdown,
     Import(Option<String>),
     Theme(Option<String>),
+    Uninstall(bool),
     Open(OpenOptions),
 }
 
@@ -84,6 +85,7 @@ async fn execute() -> Result<u8, String> {
         }
         CliCommand::Import(name) => import_editor(name.as_deref(), &home, &environment, &paths),
         CliCommand::Theme(file) => set_theme(file.as_deref(), &paths),
+        CliCommand::Uninstall(yes) => uninstall_command(yes, &home, &environment, &paths),
         CliCommand::Shutdown => {
             let stopped = stop_server(&paths.state.join("server.json"));
             println!(
@@ -408,6 +410,61 @@ fn set_theme(file: Option<&str>, paths: &ProfilePaths) -> Result<u8, String> {
     Ok(0)
 }
 
+fn uninstall_command(
+    yes: bool,
+    home: &Path,
+    environment: &BTreeMap<OsString, OsString>,
+    paths: &ProfilePaths,
+) -> Result<u8, String> {
+    if !yes {
+        if !std::io::stdin().is_terminal() {
+            return Err("pass --yes to uninstall without a prompt".into());
+        }
+        print!("Uninstall terminal-code? [y/N] ");
+        std::io::stdout()
+            .flush()
+            .map_err(|error| error.to_string())?;
+        let mut answer = String::new();
+        std::io::stdin()
+            .read_line(&mut answer)
+            .map_err(|error| error.to_string())?;
+        if !matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            return Ok(0);
+        }
+    }
+    stop_server(&paths.state.join("server.json"));
+    let data_home = paths.data.parent().unwrap_or(&paths.data);
+    let config_home = environment
+        .get(&OsString::from("XDG_CONFIG_HOME"))
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .unwrap_or_else(|| home.join(".config"));
+    let bin_home = environment
+        .get(&OsString::from("XDG_BIN_HOME"))
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .unwrap_or_else(|| home.join(".local/bin"));
+    let font = if cfg!(target_os = "macos") {
+        home.join("Library/Fonts/JetBrainsMono-Regular.ttf")
+    } else {
+        data_home.join("fonts/JetBrainsMono-Regular.ttf")
+    };
+    uninstall(&UninstallConfig {
+        paths: paths.clone(),
+        install_roots: vec![paths.install_root.clone(), home.join(".local/lib/tode")],
+        shim: bin_home.join("tode"),
+        font,
+        bundled_font: paths
+            .install_root
+            .join("assets/fonts/JetBrainsMono-Regular.ttf"),
+        ghostty_config: config_home.join("ghostty"),
+        kitty_config: config_home.join("kitty"),
+    })
+    .map_err(|error| format!("uninstall: {error}"))?;
+    println!("done");
+    Ok(0)
+}
+
 fn parse_command(arguments: Vec<String>) -> Result<CliCommand, String> {
     match arguments.as_slice() {
         [flag] if matches!(flag.as_str(), "--help" | "-h") => return Ok(CliCommand::Help),
@@ -424,6 +481,15 @@ fn parse_command(arguments: Vec<String>) -> Result<CliCommand, String> {
                 return Err("--theme takes at most one file".into());
             }
             return Ok(CliCommand::Theme(rest.first().cloned()));
+        }
+        [flag, rest @ ..] if flag == "--uninstall" => {
+            if rest
+                .iter()
+                .all(|argument| matches!(argument.as_str(), "--yes" | "-y"))
+            {
+                return Ok(CliCommand::Uninstall(!rest.is_empty()));
+            }
+            return Err("--uninstall accepts only --yes or -y".into());
         }
         _ => {}
     }
@@ -609,6 +675,14 @@ mod tests {
         assert_eq!(
             parse_command(vec!["--theme".into()]).unwrap(),
             CliCommand::Theme(None)
+        );
+        assert_eq!(
+            parse_command(vec!["--uninstall".into()]).unwrap(),
+            CliCommand::Uninstall(false)
+        );
+        assert_eq!(
+            parse_command(vec!["--uninstall".into(), "--yes".into()]).unwrap(),
+            CliCommand::Uninstall(true)
         );
         assert_eq!(
             parse_command(Vec::new()).unwrap(),
