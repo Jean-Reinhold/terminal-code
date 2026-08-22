@@ -14,7 +14,10 @@ use tode_core::{
     HELP, OpenFile, OpenRequest, installed_version, parse_goto, resolve_target, send_to_extension,
     with_fallbacks, workbench_url,
 };
-use tode_profile::{FONT_FAMILY, ProfilePaths, install_settings, install_theme, write_if_changed};
+use tode_profile::{
+    FONT_FAMILY, ProfilePaths, find_editors, install_settings, install_theme, run_import,
+    write_if_changed,
+};
 use tode_runtime::{
     BrowserHomes, RuntimeRoots, ServerState, current_server, injected_css, resolve_runtime,
     stop_server,
@@ -47,6 +50,8 @@ enum CliCommand {
     Help,
     Version,
     Shutdown,
+    Import(Option<String>),
+    Theme(Option<String>),
     Open(OpenOptions),
 }
 
@@ -77,6 +82,8 @@ async fn execute() -> Result<u8, String> {
             println!("{}", installed_version(&paths.install_root));
             Ok(0)
         }
+        CliCommand::Import(name) => import_editor(name.as_deref(), &home, &environment, &paths),
+        CliCommand::Theme(file) => set_theme(file.as_deref(), &paths),
         CliCommand::Shutdown => {
             let stopped = stop_server(&paths.state.join("server.json"));
             println!(
@@ -353,11 +360,71 @@ fn manage_extensions(
     Ok(0)
 }
 
+fn import_editor(
+    name: Option<&str>,
+    home: &Path,
+    environment: &BTreeMap<OsString, OsString>,
+    paths: &ProfilePaths,
+) -> Result<u8, String> {
+    let xdg = environment
+        .get(&OsString::from("XDG_CONFIG_HOME"))
+        .map(PathBuf::from);
+    let editors = find_editors(home, xdg.as_deref(), cfg!(target_os = "macos"));
+    let editor = match name {
+        Some(name) => editors
+            .iter()
+            .find(|editor| editor.name.eq_ignore_ascii_case(name)),
+        None => editors.first(),
+    }
+    .ok_or_else(|| match name {
+        Some(name) => format!("no compatible editor named {name}"),
+        None => "no compatible editor found".into(),
+    })?;
+    let report = run_import(editor, paths);
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&report).expect("import report serializes")
+    );
+    Ok(0)
+}
+
+fn set_theme(file: Option<&str>, paths: &ProfilePaths) -> Result<u8, String> {
+    if let Some(file) = file {
+        return Err(format!(
+            "theme file import is not yet available in Rust: {file}"
+        ));
+    }
+    let installed =
+        install_theme(paths, &with_fallbacks(None)).map_err(|error| error.to_string())?;
+    println!(
+        "theme {} {}",
+        installed.fingerprint,
+        if installed.changed {
+            "written"
+        } else {
+            "already current"
+        }
+    );
+    Ok(0)
+}
+
 fn parse_command(arguments: Vec<String>) -> Result<CliCommand, String> {
     match arguments.as_slice() {
         [flag] if matches!(flag.as_str(), "--help" | "-h") => return Ok(CliCommand::Help),
         [flag] if matches!(flag.as_str(), "--version" | "-v") => return Ok(CliCommand::Version),
         [flag] if flag == "--shutdown" => return Ok(CliCommand::Shutdown),
+        [flag, rest @ ..] if flag == "--import" => {
+            if rest.len() > 1 {
+                return Err("--import takes at most one editor name".into());
+            }
+            return Ok(CliCommand::Import(rest.first().cloned()));
+        }
+        [flag, rest @ ..] if flag == "--theme" => {
+            if rest.len() > 1 {
+                return Err("--theme takes at most one file".into());
+            }
+            return Ok(CliCommand::Theme(rest.first().cloned()));
+        }
         _ => {}
     }
     let mut options = OpenOptions::default();
@@ -518,7 +585,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_identity_shutdown_and_default_open() {
+    fn parses_identity_profile_shutdown_and_default_open() {
         assert_eq!(
             parse_command(vec!["--help".into()]).unwrap(),
             CliCommand::Help
@@ -530,6 +597,18 @@ mod tests {
         assert_eq!(
             parse_command(vec!["--shutdown".into()]).unwrap(),
             CliCommand::Shutdown
+        );
+        assert_eq!(
+            parse_command(vec!["--import".into()]).unwrap(),
+            CliCommand::Import(None)
+        );
+        assert_eq!(
+            parse_command(vec!["--import".into(), "Code".into()]).unwrap(),
+            CliCommand::Import(Some("Code".into()))
+        );
+        assert_eq!(
+            parse_command(vec!["--theme".into()]).unwrap(),
+            CliCommand::Theme(None)
         );
         assert_eq!(
             parse_command(Vec::new()).unwrap(),

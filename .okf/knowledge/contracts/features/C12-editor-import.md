@@ -5,20 +5,21 @@ contract_id: C12
 description: Preserve editor discovery and import of settings, keybindings, snippets, tasks, and extensions.
 tags: [import, editors, profile, extensions]
 status: draft
-implementation_status: rust-import-service-parity
+implementation_status: rust-production-import
 risk: critical
 owners: [import, profile]
 surfaces: [filesystem, process, browser]
-source_paths: [src/import/run.ts, src/import/editors.ts, src/import/command.ts, src/import/web.ts, crates/tode-profile/src/import.rs, test/import.test.js]
+source_paths: [src/import/run.ts, src/import/editors.ts, src/import/command.ts, src/import/web.ts, crates/tode-profile/src/import.rs, crates/tode-cli/tests/profile_commands.rs, test/import.test.js]
 scenario_ids: []
 legacy_test_paths: [test/import.test.js]
-rust_test_paths: [crates/tode-profile/src/import.rs]
+rust_test_paths: [crates/tode-profile/src/import.rs, crates/tode-cli/tests/profile_commands.rs]
 platforms: [macos, linux]
 sources:
   - { id: run, resource: ../../../../src/import/run.ts, title: Import pipeline }
   - { id: editors, resource: ../../../../src/import/editors.ts, title: Editor discovery }
   - { id: tests, resource: ../../../../test/import.test.js, title: Import page test }
   - { id: rust, resource: ../../../../crates/tode-profile/src/import.rs, title: Rust settings, keybindings, snippets, tasks, and extensions import }
+  - { id: rust-cli, resource: ../../../../crates/tode-cli/tests/profile_commands.rs, title: Production Rust import command integration }
 ---
 
 # Contract
@@ -27,4 +28,4 @@ Discover compatible editors in existing precedence, import settings without over
 
 # Coverage Status
 
-Six Rust integration tests cover editor/extension discovery, absolute-XDG precedence, content summaries, progress events, settings precedence/reports, keybinding deduplication, snippet/task copying, extension registry/copy, existing registry retention, missing/unsafe folders, and symlink rejection. The non-UI import service is ported. C12 remains draft until managed theme registration, production command wiring, and the embedded UI are complete.
+Rust service tests plus production CLI integration cover editor discovery/selection, settings precedence/report, extension progress/copy safety, and profile output. C12 remains draft until managed theme registration after extension import and the embedded UI are complete.
