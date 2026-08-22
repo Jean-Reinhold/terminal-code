@@ -31,3 +31,4 @@
 * **M4 daemon composition**: Composed managed code-server, Rust injector, combined state, warm-up, proxied origin, and complete shutdown into one Rust daemon transaction.
 * **M4 terminal-browser resolution**: Added Rust override/vendored/pinned/system-clone precedence, platform Electron layout, exact Bash launcher environment, browser homes, and executable mode.
 * **M4 downloaded runtime**: Composed release lookup, exact verified download, strip-one safe extraction, usability validation, tarball cleanup, and launcher creation.
+* **M4 daemon command**: Added persistent `tode-daemon` readiness JSON, SIGTERM/Ctrl-C handling, child shutdown, and state cleanup with real Rust-binary integration.

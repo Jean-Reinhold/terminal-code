@@ -25,7 +25,7 @@ sha2 = "0.10"
 tempfile = "3"
 thiserror = "2"
 tar = "0.4"
-tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
 wait-timeout = "0.2"
 walkdir = "2"
 yaml_serde = "0.10.7"

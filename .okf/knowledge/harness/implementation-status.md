@@ -21,7 +21,7 @@ sources:
 * Root Cargo workspace pinned to Rust 1.98.0.
 * `tode-core` Rust library with CLI identity, target/goto, Unix IPC, OSC palettes, source-preserving JSONC, complete themes, shortcut transforms/decisions, and release target/manifest/receipt schemas.
 * `tode-profile` Rust crate with XDG/install ownership, managed/seeded settings, atomic writes, managed theme extension/registry/live files, and full non-UI editor import.
-* `tode-runtime` Rust override/vendored/pinned/system/downloaded terminal-browser resolution, verified artifacts/launcher, and composed managed code-server/injector daemon.
+* `tode-runtime` Rust downloaded/existing terminal-browser resolution, verified artifacts/launcher, and persistent managed code-server/injector daemon command.
 * `tode-harness` binary/library with `catalog check`, `schema`, `run`, and `replay` commands.
 * YAML-backed OKF catalog with 22 contract concepts, draft-aware executable coverage, reciprocal scenario links, risk/owner/surface/platform/source validation, and all 119 legacy test declarations mapped.
 * Strict JSONC scenario v1 compiler and generated JSON Schema.
@@ -40,11 +40,11 @@ sources:
 
 # Verified Behavior
 
-* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 83 contract-mapped Rust tests.
+* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 85 contract-mapped Rust tests.
 * C01 Rust help/version scenarios matched exact snapshots captured from the legacy CLI.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* Ninety-seven Rust workspace tests passed:
+* Ninety-nine Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
   - CLI help completeness and version receipt/fallback;
@@ -82,7 +82,8 @@ sources:
   - two exact code-server command/environment and managed spawn/readiness/shutdown integration tests;
   - two daemon asset-extraction and composed code-server/injector/state/shutdown tests;
   - four terminal-browser layout/precedence/clone/launcher tests;
-  - one release lookup/download/strip-one/unpack/launcher composition test.
+  - one release lookup/download/strip-one/unpack/launcher composition test;
+  - two persistent daemon argument/readiness/SIGTERM/child/state-cleanup tests.
 * `cargo fmt --all` and strict Clippy with `-D warnings` passed.
 
 # Current Trust Boundary
@@ -106,5 +107,4 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Next Slice
 
-
-Continue M4/M6 by exposing the composed runtime as a persistent Rust daemon command and wiring production launch/reuse/shutdown orchestration. Full C14 convergence remains explicitly open.
+Continue M6 by promoting the Rust contract CLI into production command parsing and starting/reusing the persistent daemon. Full C14 convergence remains explicitly open.
