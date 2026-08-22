@@ -18,7 +18,7 @@ sources:
 
 # Implemented
 
-* Root Cargo workspace pinned to Rust 1.98.0.
+* Root Cargo workspace pinned to Rust 1.98.0 with core/profile/runtime/CLI/harness/release-HTTP crates.
 * `tode-core` Rust library with CLI identity, target/goto, Unix IPC, OSC palettes, source-preserving JSONC, complete themes, shortcut transforms/decisions, and release target/manifest/receipt schemas.
 * `tode-profile` Rust crate with XDG/install ownership, atomic writes, embedded platform user-font installation, managed/seeded settings, managed theme and dependency-free window bridge extensions, full editor import, Ghostty/Kitty shortcut provider orchestration, and shortcut decision manager state.
 * `tode-runtime` Rust downloaded/existing terminal-browser resolution, verified artifacts/launcher, generated Electron timing/live-theme bridge with Rust conversion helper, token-scoped embedded shortcut/import managers, and persistent managed code-server/injector daemon command.
@@ -41,11 +41,11 @@ sources:
 
 # Verified Behavior
 
-* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 137 contract-mapped Rust tests.
+* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 142 contract-mapped Rust tests.
 * C01 Rust help/version scenarios matched exact snapshots captured from the legacy CLI.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* One hundred fifty-one Rust workspace tests passed:
+* One hundred fifty-six Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
   - CLI help completeness and version receipt/fallback;
@@ -99,6 +99,7 @@ sources:
   - five verified upgrade outcome/transaction/production-check/full-swap/daemon-cleanup tests.
   - four timing formatter and production command integration tests.
   - one production live-state skill document and first-argument dispatch integration test;
+  - five release HTTP installer/manifest/download/HEAD/range/cache/error route tests;
 * `cargo fmt --all` and strict Clippy with `-D warnings` passed.
 
 # Current Trust Boundary
@@ -121,5 +122,4 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 * JUnit/SARIF/static HTML reports, remote immutable storage, signatures, CI tiers, or release certificates.
 
 # Next Slice
-
-Continue automated real terminal theme-change certification, then promote embedded-page browser cases into harness scenarios and add direct dual-target differential execution.
+Continue M7 with the Cloudflare R2/WASM adapter and Rust public site, then promote browser cases into harness scenarios and add direct dual-target differential execution.
