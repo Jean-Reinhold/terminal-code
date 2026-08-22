@@ -19,4 +19,8 @@ tode-runtime = { path = "../tode-runtime" }
 tokio.workspace = true
 
 [dev-dependencies]
+flate2.workspace = true
+hex.workspace = true
+sha2.workspace = true
+tar.workspace = true
 tempfile.workspace = true

@@ -5,7 +5,7 @@ contract_id: C19
 description: Preserve latest/pinned lookup, check outcomes, verified fetch, atomic swap, receipts, and rollback safety.
 tags: [upgrade, release, atomicity, rollback]
 status: draft
-implementation_status: rust-production-check-partial
+implementation_status: rust-production-transaction-parity
 risk: critical
 owners: [release, runtime]
 surfaces: [cli, http, filesystem, process]
@@ -20,7 +20,7 @@ sources:
   - { id: rust, resource: ../../../../crates/tode-core/src/release.rs, title: Rust build selection and installed receipts }
   - { id: rust-artifact, resource: ../../../../crates/tode-runtime/src/artifact.rs, title: Rust verified artifacts, safe extraction, and atomic swap }
   - { id: rust-upgrade, resource: ../../../../crates/tode-runtime/src/upgrade.rs, title: Rust verified staged upgrade transaction }
-  - { id: rust-cli, resource: ../../../../crates/tode-cli/tests/upgrade.rs, title: Production Rust upgrade check integration }
+  - { id: rust-cli, resource: ../../../../crates/tode-cli/tests/upgrade.rs, title: Production Rust upgrade check and full transaction integration }
 ---
 
 # Contract
@@ -29,4 +29,4 @@ Preserve target manifest selection, not-install/current/available/upgraded outco
 
 # Coverage Status
 
-Rust tests cover schemas/receipts, current/available/upgraded outcomes, production `--check`, exact download verification, failed-download preservation, safe staged extraction, VERSION/CHANNEL staging, complete swap, and old-file removal. C19 remains draft until full production upgraded-output/daemon-stop and interruption-at-every-checkpoint scenarios are certified.
+Rust tests cover schemas/receipts, current/available/upgraded outcomes, production `--check` and full upgraded output, exact download verification, failed-download preservation, safe staged extraction, VERSION/CHANNEL staging, complete swap, old-file removal, and post-success daemon-state cleanup. C19 remains draft until interruption-at-every-checkpoint and real release-channel certification are complete.
