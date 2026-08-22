@@ -36,6 +36,10 @@ struct OpenOptions {
     size: Option<String>,
     review: bool,
     warnings: Vec<String>,
+    install_extensions: Vec<String>,
+    uninstall_extensions: Vec<String>,
+    list_extensions: bool,
+    show_versions: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -99,6 +103,12 @@ async fn open(
     paths: &ProfilePaths,
     environment: &BTreeMap<OsString, OsString>,
 ) -> Result<u8, String> {
+    if !options.install_extensions.is_empty()
+        || !options.uninstall_extensions.is_empty()
+        || options.list_extensions
+    {
+        return manage_extensions(&options, paths, environment);
+    }
     let cwd = env::current_dir().map_err(|error| error.to_string())?;
     let files = open_files(&options, &cwd)?;
     let wanted: Vec<_> = if options.goto || options.diff {
@@ -215,22 +225,7 @@ fn start_daemon(
     css_file: &Path,
     state_file: &Path,
 ) -> Result<ServerState, String> {
-    let code_server = environment
-        .get(&OsString::from("TODE_CODE_SERVER"))
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            paths
-                .data
-                .join("code-server")
-                .join(CODE_SERVER_VERSION)
-                .join("bin/code-server")
-        });
-    if !code_server.is_file() {
-        return Err(format!(
-            "code-server {CODE_SERVER_VERSION} not found at {}",
-            code_server.display()
-        ));
-    }
+    let code_server = code_server_path(paths, environment)?;
     let daemon = environment
         .get(&OsString::from("TODE_DAEMON"))
         .map(PathBuf::from)
@@ -290,6 +285,74 @@ fn start_daemon(
     serde_json::from_str(line.trim()).map_err(|error| format!("read daemon state: {error}"))
 }
 
+fn code_server_path(
+    paths: &ProfilePaths,
+    environment: &BTreeMap<OsString, OsString>,
+) -> Result<PathBuf, String> {
+    let code_server = environment
+        .get(&OsString::from("TODE_CODE_SERVER"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            paths
+                .data
+                .join("code-server")
+                .join(CODE_SERVER_VERSION)
+                .join("bin/code-server")
+        });
+    if code_server.is_file() {
+        Ok(code_server)
+    } else {
+        Err(format!(
+            "code-server {CODE_SERVER_VERSION} not found at {}",
+            code_server.display()
+        ))
+    }
+}
+
+fn manage_extensions(
+    options: &OpenOptions,
+    paths: &ProfilePaths,
+    environment: &BTreeMap<OsString, OsString>,
+) -> Result<u8, String> {
+    let binary = code_server_path(paths, environment)?;
+    let run = |arguments: &[String]| -> Result<i32, String> {
+        let status = Command::new(&binary)
+            .args(arguments)
+            .args([
+                OsString::from("--extensions-dir"),
+                paths.extensions.clone().into_os_string(),
+                OsString::from("--user-data-dir"),
+                paths.data.join("vscode/user-data").into_os_string(),
+            ])
+            .status()
+            .map_err(|error| format!("run code-server extension command: {error}"))?;
+        Ok(status.code().unwrap_or(1))
+    };
+    if options.list_extensions {
+        let mut arguments = vec!["--list-extensions".to_owned()];
+        if options.show_versions {
+            arguments.push("--show-versions".into());
+        }
+        return Ok(run(&arguments)?.clamp(0, 255) as u8);
+    }
+    for extension in &options.uninstall_extensions {
+        let code = run(&["--uninstall-extension".into(), extension.clone()])?;
+        if code != 0 {
+            return Ok(code.clamp(0, 255) as u8);
+        }
+    }
+    for extension in &options.install_extensions {
+        let code = run(&["--install-extension".into(), extension.clone()])?;
+        if code != 0 {
+            return Ok(code.clamp(0, 255) as u8);
+        }
+    }
+    if !options.install_extensions.is_empty() {
+        println!("open tode again to pick it up");
+    }
+    Ok(0)
+}
+
 fn parse_command(arguments: Vec<String>) -> Result<CliCommand, String> {
     match arguments.as_slice() {
         [flag] if matches!(flag.as_str(), "--help" | "-h") => return Ok(CliCommand::Help),
@@ -329,6 +392,20 @@ fn parse_command(arguments: Vec<String>) -> Result<CliCommand, String> {
                     "tode: ignoring {argument}, extensions are per code-server, not per window"
                 ));
             }
+            "--install-extension" | "--uninstall-extension" => {
+                let value = arguments
+                    .get(index + 1)
+                    .ok_or_else(|| format!("{argument} needs a value"))?
+                    .clone();
+                if argument == "--install-extension" {
+                    options.install_extensions.push(value);
+                } else {
+                    options.uninstall_extensions.push(value);
+                }
+                index += 1;
+            }
+            "--list-extensions" => options.list_extensions = true,
+            "--show-versions" => options.show_versions = true,
             "--split" | "--size" => {
                 let value = arguments
                     .get(index + 1)
@@ -360,6 +437,9 @@ fn parse_command(arguments: Vec<String>) -> Result<CliCommand, String> {
     }
     if options.diff && options.paths.len() != 2 {
         return Err("--diff takes two files".into());
+    }
+    if options.show_versions && !options.list_extensions {
+        return Err("--show-versions only applies with --list-extensions".into());
     }
     Ok(CliCommand::Open(options))
 }
@@ -518,6 +598,35 @@ mod tests {
             ["tode: ignoring --disable-extensions, extensions are per code-server, not per window"]
         );
         assert!(parse_command(vec!["--locale".into()]).is_err());
+    }
+
+    #[test]
+    fn parses_repeated_extension_operations_and_list_versions() {
+        let command = parse_command(vec![
+            "--uninstall-extension".into(),
+            "old.one".into(),
+            "--install-extension".into(),
+            "new.one".into(),
+            "--install-extension".into(),
+            "new.two".into(),
+        ])
+        .unwrap();
+        let CliCommand::Open(options) = command else {
+            panic!("expected open command");
+        };
+        assert_eq!(options.uninstall_extensions, ["old.one"]);
+        assert_eq!(options.install_extensions, ["new.one", "new.two"]);
+        let list =
+            parse_command(vec!["--list-extensions".into(), "--show-versions".into()]).unwrap();
+        assert!(matches!(
+            list,
+            CliCommand::Open(OpenOptions {
+                list_extensions: true,
+                show_versions: true,
+                ..
+            })
+        ));
+        assert!(parse_command(vec!["--show-versions".into()]).is_err());
     }
 
     #[test]

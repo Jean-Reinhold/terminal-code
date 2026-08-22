@@ -35,3 +35,4 @@
 * **M6 basic working CLI**: Added production Rust `tode` help/version/open/shutdown, fallback profile/theme/CSS, persistent daemon start/reuse, terminal-browser launch, and end-to-end Rust-only integration.
 * **M6 existing-window reuse**: Added Rust goto/add/diff/new/reuse/wait/review/split/size parsing and production `TODE_IPC` goto/wait/review reuse integration.
 * **M6 compatibility flags**: Ported documented ignored flags, value-consuming ignored options, warning-only extension-isolation flags, and strict invalid/missing-value handling.
+* **M6 extension management**: Added Rust install/uninstall/list/show-versions parsing, uninstall-first execution, managed profile paths, exit propagation, and Bash-fixture integration.
