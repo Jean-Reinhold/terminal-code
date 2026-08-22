@@ -21,8 +21,8 @@ sources:
 * Root Cargo workspace pinned to Rust 1.98.0.
 * `tode-core` Rust library with CLI identity, target/goto, Unix IPC, OSC palettes, source-preserving JSONC, complete themes, shortcut transforms/decisions, and release target/manifest/receipt schemas.
 * `tode-profile` Rust crate with XDG/install ownership, managed/seeded settings, atomic writes, managed theme extension/registry/live files, full non-UI editor import, Ghostty/Kitty shortcut provider orchestration, and shortcut decision manager state.
-* `tode-runtime` Rust downloaded/existing terminal-browser resolution, verified artifacts/launcher, generated Electron timing bridge, and persistent managed code-server/injector daemon command.
-* Production Rust `tode` binary with help/version, compatibility/open parsing, extensions, import/theme/timing/skill/upgrade/uninstall, existing-window reuse, profile/CSS, daemon, timed browser-bridge launch, and shutdown.
+* `tode-runtime` Rust downloaded/existing terminal-browser resolution, verified artifacts/launcher, generated Electron timing bridge, token-scoped embedded shortcut manager, and persistent managed code-server/injector daemon command.
+* Production Rust `tode` binary with help/version, compatibility/open parsing, extensions, shortcut setup/undo/TTY manager, import/theme/timing/skill/upgrade/uninstall, existing-window reuse, profile/CSS/keybindings, daemon, timed browser-bridge launch, and shutdown.
 * `tode-harness` binary/library with `catalog check`, `schema`, `run`, and `replay` commands.
 * YAML-backed OKF catalog with 22 contract concepts, draft-aware executable coverage, reciprocal scenario links, risk/owner/surface/platform/source validation, and all 119 legacy test declarations mapped.
 * Strict JSONC scenario v1 compiler and generated JSON Schema.
@@ -41,11 +41,11 @@ sources:
 
 # Verified Behavior
 
-* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 118 contract-mapped Rust tests.
+* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 124 contract-mapped Rust tests.
 * C01 Rust help/version scenarios matched exact snapshots captured from the legacy CLI.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* One hundred thirty-two Rust workspace tests passed:
+* One hundred thirty-eight Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
   - CLI help completeness and version receipt/fallback;
@@ -76,6 +76,8 @@ sources:
   - four persisted shortcut claim/import/quit/fallback binding tests;
   - four provider detection/effective-scan/shared-convergence/atomic-undo/keybinding-reconciliation tests;
   - four manager row/occupancy/twin-cleanup/persist-reopen/cyclic-claim state-machine tests;
+  - one bounded token-scoped embedded manager HTTP decision/apply/done integration test;
+  - five production shortcut unsupported/readiness/undo/no-conflict/non-TTY command integration tests;
   - five profile path/precedence/idempotence/atomic-install tests;
   - six import discovery/progress/settings/keybindings/snippets/tasks/extensions safety/report tests;
   - two managed theme extension/registry/live-file cleanup/idempotence tests;
@@ -108,7 +110,7 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Not Implemented Yet
 
-* Remaining embedded shortcut HTTP manager/CLI/browser admission, full upgraded-output transaction integration, and direct dual-target differential execution.
+* Remaining shortcut ancestry reload/full adversarial translation, full upgraded-output transaction integration, and direct dual-target differential execution.
 * Executable scenarios for C03-C04 and C06-C22; their concepts and legacy test mappings are complete.
 * PTY/OSC, browser, terminal hardware, release/R2, and install scenario adapters.
 * Hard S2/S3 isolation, total resource budgets, fault injection, and crash resumption.
@@ -116,4 +118,5 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 * JUnit/SARIF/static HTML reports, remote immutable storage, signatures, CI tiers, or release certificates.
 
 # Next Slice
-Continue M5/M6 with the embedded shortcut manager and CLI dispatch, then full upgraded-output integration. New-launch goto/diff/review still awaits the Rust bridge.
+
+Continue M5 with live terminal reload and full shortcut-loop translation, then M6 upgraded-output integration. New-launch goto/diff/review still awaits the Rust bridge.

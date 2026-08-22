@@ -18,13 +18,19 @@ use tode_core::{
     latest_manifest_path, parse_goto, resolve_target, send_to_extension, with_fallbacks,
     workbench_url,
 };
+use tode_profile::shortcut_manager::ShortcutSession;
+use tode_profile::shortcuts::{
+    TerminalKind, auto_apply_shared, detect_provider, install_shortcut_keybindings, load_decisions,
+    provider_readiness, scan_shortcuts, undo_shortcuts,
+};
 use tode_profile::{
     FONT_FAMILY, ProfilePaths, UninstallConfig, find_editors, install_settings, install_theme,
     run_import, uninstall, write_if_changed,
 };
 use tode_runtime::{
-    BrowserHomes, RuntimeRoots, ServerState, UpgradeOutcome, apply_build, current_server,
-    injected_css, resolve_runtime, stop_server, write_browser_scripts, write_launch_timing,
+    BrowserHomes, BrowserRuntime, RuntimeRoots, ServerState, ShortcutManager,
+    ShortcutManagerConfig, UpgradeOutcome, apply_build, current_server, injected_css,
+    resolve_runtime, stop_server, write_browser_scripts, write_launch_timing,
 };
 
 const TERMINAL_BROWSER_VERSION: &str = "v0.5.8";
@@ -57,6 +63,10 @@ enum CliCommand {
     Shutdown,
     Timing,
     Skill,
+    ShortcutSetup {
+        arguments: Vec<String>,
+        no_boot: bool,
+    },
     Import(Option<String>),
     Theme(Option<String>),
     Uninstall(bool),
@@ -110,6 +120,14 @@ async fn execute() -> Result<u8, String> {
                 .await
             );
             Ok(0)
+        }
+        CliCommand::ShortcutSetup { arguments, no_boot } => {
+            let outcome = shortcut_setup(&arguments, &home, &environment, &paths).await?;
+            if outcome.boot && !no_boot {
+                open(OpenOptions::default(), &paths, &environment).await
+            } else {
+                Ok(outcome.code)
+            }
         }
         CliCommand::Uninstall(yes) => uninstall_command(yes, &home, &environment, &paths),
         CliCommand::Upgrade { check, version } => {
@@ -211,26 +229,7 @@ async fn open(
     let target = resolve_target(options.paths.first().map(String::as_str), &cwd);
     let started = std::time::Instant::now();
     let mut stages = Vec::new();
-    let client = reqwest::Client::new();
-    let roots = runtime_roots(paths);
-    let override_binary = environment
-        .get(&OsString::from("TODE_TERMINAL_BROWSER_BIN"))
-        .map(PathBuf::from);
-    let release_origin = environment
-        .get(&OsString::from("TODE_RELEASE_ORIGIN"))
-        .and_then(|value| value.to_str())
-        .unwrap_or("https://terminal-browser.sh/install");
-    let runtime = resolve_runtime(
-        &client,
-        &roots,
-        TERMINAL_BROWSER_VERSION,
-        TERMINAL_BROWSER_VERSION,
-        override_binary.as_deref(),
-        cfg!(target_os = "macos"),
-        release_origin,
-    )
-    .await
-    .map_err(|error| error.to_string())?;
+    let runtime = resolve_browser_runtime(paths, environment).await?;
     stages.push((
         "runtime".to_owned(),
         i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX),
@@ -239,6 +238,8 @@ async fn open(
     let palette = with_fallbacks(None);
     install_settings(paths).map_err(|error| format!("install settings: {error}"))?;
     install_theme(paths, &palette).map_err(|error| format!("install theme: {error}"))?;
+    install_shortcut_keybindings(paths, load_decisions(paths).as_ref())
+        .map_err(|error| format!("install keybindings: {error}"))?;
     let css = injected_css(&tode_core::hex(palette.background), FONT_FAMILY);
     let css_file = paths.data.join("inject.css");
     write_if_changed(&css_file, css.as_bytes()).map_err(|error| format!("install CSS: {error}"))?;
@@ -559,6 +560,127 @@ fn uninstall_command(
     Ok(0)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ShortcutOutcome {
+    code: u8,
+    boot: bool,
+}
+
+async fn shortcut_setup(
+    arguments: &[String],
+    home: &Path,
+    environment: &BTreeMap<OsString, OsString>,
+    paths: &ProfilePaths,
+) -> Result<ShortcutOutcome, String> {
+    let Some(provider) = detect_provider(home, environment) else {
+        print!(
+            "shortcut setup not yet available in this terminal, please file an issue if you want your terminal supported https://github.com/zenbu-labs/terminal-code/issues"
+        );
+        return Ok(ShortcutOutcome {
+            code: 0,
+            boot: false,
+        });
+    };
+    let reload_hint = match provider.kind {
+        TerminalKind::Ghostty => {
+            if cfg!(target_os = "macos") {
+                "reload ghostty (cmd+shift+,) or restart it for this to take effect"
+            } else {
+                "reload ghostty (ctrl+shift+,) or restart it for this to take effect"
+            }
+        }
+        TerminalKind::Kitty => "reload kitty (ctrl+shift+f5) or restart it for this to take effect",
+    };
+    if arguments.iter().any(|argument| argument == "--undo") {
+        let outcome = undo_shortcuts(&provider, paths).map_err(|error| error.to_string())?;
+        if outcome.terminal_changed || outcome.had_decisions {
+            println!(
+                "removed tode's {} overrides and editor chords",
+                provider.name
+            );
+            println!("{reload_hint}");
+        } else {
+            println!("nothing to undo");
+        }
+        return Ok(ShortcutOutcome {
+            code: 0,
+            boot: false,
+        });
+    }
+    if let Some(reason) = provider_readiness(&provider) {
+        println!("{reason}");
+        return Ok(ShortcutOutcome {
+            code: 1,
+            boot: false,
+        });
+    }
+    let mut scan = scan_shortcuts(&provider, paths).map_err(|error| error.to_string())?;
+    if auto_apply_shared(&provider, paths, &scan).map_err(|error| error.to_string())? {
+        scan = scan_shortcuts(&provider, paths).map_err(|error| error.to_string())?;
+    }
+    if scan
+        .terminal
+        .iter()
+        .all(|conflict| conflict.shared.is_some())
+        && scan.imported.is_empty()
+    {
+        println!("no shortcut conflicts detected!");
+        return Ok(ShortcutOutcome {
+            code: 0,
+            boot: false,
+        });
+    }
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        println!("run tode --shortcut-setup in a terminal to continue");
+        return Ok(ShortcutOutcome {
+            code: 0,
+            boot: false,
+        });
+    }
+    let session =
+        ShortcutSession::new(provider.clone(), paths.clone()).map_err(|error| error.to_string())?;
+    let mut manager = ShortcutManager::start(
+        session,
+        ShortcutManagerConfig {
+            reload_hint: reload_hint.into(),
+            intro: false,
+            continues: false,
+        },
+    )
+    .await
+    .map_err(|error| format!("start shortcut manager: {error}"))?;
+    let runtime = resolve_browser_runtime(paths, environment).await?;
+    let manager_url = manager.url();
+    let mut child = tokio::process::Command::new(&runtime.bin)
+        .args(["open", manager_url.as_str(), "--app-mode"])
+        .spawn()
+        .map_err(|error| format!("could not start terminal-browser: {error}"))?;
+    let status = tokio::select! {
+        () = manager.wait_done() => {
+            let _ = child.kill().await;
+            child.wait().await
+        }
+        status = child.wait() => status,
+    }
+    .map_err(|error| format!("wait for terminal-browser: {error}"))?;
+    let served = manager.served();
+    let confirmed = manager.confirmed();
+    manager.close().await;
+    let code = status.code().unwrap_or(0).clamp(0, 255) as u8;
+    if !served {
+        eprintln!(
+            "tode: the shortcuts wizard never reached the screen (terminal-browser exited {code})"
+        );
+    }
+    if confirmed {
+        println!("{reload_hint}");
+    }
+    Ok(ShortcutOutcome {
+        code: if confirmed { 0 } else { code },
+        boot: confirmed,
+    })
+}
+
 async fn upgrade_command(
     check: bool,
     version: Option<&str>,
@@ -627,6 +749,22 @@ fn parse_command(arguments: Vec<String>) -> Result<CliCommand, String> {
         [flag] if flag == "--shutdown" => return Ok(CliCommand::Shutdown),
         [flag] if flag == "--timing" => return Ok(CliCommand::Timing),
         [flag, ..] if flag == "--skill" => return Ok(CliCommand::Skill),
+        [flag, rest @ ..] if flag == "--shortcut-setup" => {
+            let mut no_boot = false;
+            let arguments = rest
+                .iter()
+                .filter(|argument| {
+                    if argument.as_str() == "--no-boot" {
+                        no_boot = true;
+                        false
+                    } else {
+                        true
+                    }
+                })
+                .cloned()
+                .collect();
+            return Ok(CliCommand::ShortcutSetup { arguments, no_boot });
+        }
         [flag, rest @ ..] if flag == "--upgrade" => {
             let mut check = false;
             let mut version = None;
@@ -810,6 +948,32 @@ fn default_daemon_path() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("tode-daemon"))
 }
 
+async fn resolve_browser_runtime(
+    paths: &ProfilePaths,
+    environment: &BTreeMap<OsString, OsString>,
+) -> Result<BrowserRuntime, String> {
+    let client = reqwest::Client::new();
+    let roots = runtime_roots(paths);
+    let override_binary = environment
+        .get(&OsString::from("TODE_TERMINAL_BROWSER_BIN"))
+        .map(PathBuf::from);
+    let release_origin = environment
+        .get(&OsString::from("TODE_RELEASE_ORIGIN"))
+        .and_then(|value| value.to_str())
+        .unwrap_or("https://terminal-browser.sh/install");
+    resolve_runtime(
+        &client,
+        &roots,
+        TERMINAL_BROWSER_VERSION,
+        TERMINAL_BROWSER_VERSION,
+        override_binary.as_deref(),
+        cfg!(target_os = "macos"),
+        release_origin,
+    )
+    .await
+    .map_err(|error| error.to_string())
+}
+
 fn runtime_roots(paths: &ProfilePaths) -> RuntimeRoots {
     let xdg_data = paths.data.parent().unwrap_or(&paths.data);
     RuntimeRoots {
@@ -850,6 +1014,18 @@ mod tests {
         assert_eq!(
             parse_command(vec!["--skill".into(), "ignored".into()]).unwrap(),
             CliCommand::Skill
+        );
+        assert_eq!(
+            parse_command(vec![
+                "--shortcut-setup".into(),
+                "--no-boot".into(),
+                "--undo".into(),
+            ])
+            .unwrap(),
+            CliCommand::ShortcutSetup {
+                arguments: vec!["--undo".into()],
+                no_boot: true,
+            }
         );
         assert_eq!(
             parse_command(vec!["--import".into()]).unwrap(),

@@ -4,6 +4,7 @@ pub mod browser_bridge;
 pub mod daemon;
 pub mod injector;
 pub mod process;
+pub mod shortcut_manager;
 pub mod upgrade;
 
 pub use artifact::{
@@ -22,4 +23,5 @@ pub use process::{
     code_server_arguments, current_server, extensions_gallery, now_unix_ms, origin, pid_running,
     read_state, start_code_server, stop_server, wait_ready, write_state,
 };
+pub use shortcut_manager::{ShortcutManager, ShortcutManagerConfig};
 pub use upgrade::{UpgradeError, UpgradeOutcome, apply_build};

@@ -768,7 +768,7 @@ mod tests {
     #[test]
     fn rows_and_taken_track_staged_moves() {
         let (root, environment, paths) = fixture();
-        let provider = detect_provider(root.path(), &environment).unwrap().unwrap();
+        let provider = detect_provider(root.path(), &environment).unwrap();
         let mut session = ShortcutSession::new(provider, paths).unwrap();
         assert_eq!(session.rows().len(), 2);
         assert!(
@@ -804,7 +804,7 @@ mod tests {
     #[test]
     fn confirm_persists_and_applies_then_reopens_cleanly() {
         let (root, environment, paths) = fixture();
-        let provider = detect_provider(root.path(), &environment).unwrap().unwrap();
+        let provider = detect_provider(root.path(), &environment).unwrap();
         let mut session = ShortcutSession::new(provider, paths.clone()).unwrap();
         for id in ["ctrl+p", "ctrl+k"] {
             session.decide(
@@ -824,7 +824,7 @@ mod tests {
         }))
         .unwrap_or_default();
         assert!(config.contains("ctrl+p"));
-        let provider = detect_provider(root.path(), &environment).unwrap().unwrap();
+        let provider = detect_provider(root.path(), &environment).unwrap();
         let reopened = ShortcutSession::new(provider, paths).unwrap();
         assert_eq!(reopened.staged.len(), 2);
     }
@@ -832,7 +832,7 @@ mod tests {
     #[test]
     fn decision_twin_is_not_staged_twice() {
         let (root, environment, paths) = fixture();
-        let provider = detect_provider(root.path(), &environment).unwrap().unwrap();
+        let provider = detect_provider(root.path(), &environment).unwrap();
         let mut session = ShortcutSession::new(provider, paths).unwrap();
         session.decide(
             "ctrl+p",
@@ -857,7 +857,7 @@ mod tests {
     #[test]
     fn cyclic_claim_moves_terminate_and_deduplicate() {
         let (root, environment, paths) = fixture();
-        let provider = detect_provider(root.path(), &environment).unwrap().unwrap();
+        let provider = detect_provider(root.path(), &environment).unwrap();
         let mut session = ShortcutSession::new(provider, paths).unwrap();
         session.staged.insert(
             "ctrl+p".into(),

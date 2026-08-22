@@ -186,7 +186,7 @@ struct KittyKeymap {
 pub fn detect_provider(
     home: &Path,
     environment: &BTreeMap<OsString, OsString>,
-) -> Option<Result<TerminalProvider, String>> {
+) -> Option<TerminalProvider> {
     if environment
         .get(OsStr::new("TERM_PROGRAM"))
         .is_some_and(|value| value == "ghostty")
@@ -217,34 +217,42 @@ pub fn detect_provider(
     None
 }
 
+pub fn provider_readiness(provider: &TerminalProvider) -> Option<String> {
+    if is_executable(&provider.binary) {
+        return None;
+    }
+    Some(match provider.kind {
+        TerminalKind::Ghostty => {
+            "the ghostty cli is not on PATH, so its keybinds cannot be read".to_owned()
+        }
+        TerminalKind::Kitty => {
+            "the kitty cli is not on PATH, so its keymap cannot be read".to_owned()
+        }
+    })
+}
+
 fn provider(
     kind: TerminalKind,
     name: &'static str,
     command: &'static str,
     config_dir: PathBuf,
     environment: &BTreeMap<OsString, OsString>,
-) -> Result<TerminalProvider, String> {
-    find_executable(command, environment)
-        .map(|binary| TerminalProvider {
-            kind,
-            name,
-            binary,
-            config_dir,
-        })
-        .ok_or_else(|| match kind {
-            TerminalKind::Ghostty => {
-                "the ghostty cli is not on PATH, so its keybinds cannot be read".to_owned()
-            }
-            TerminalKind::Kitty => {
-                "the kitty cli is not on PATH, so its keymap cannot be read".to_owned()
-            }
-        })
+) -> TerminalProvider {
+    TerminalProvider {
+        kind,
+        name,
+        binary: find_executable(command, environment).unwrap_or_else(|| command.into()),
+        config_dir,
+    }
 }
 
 pub fn scan_shortcuts(
     provider: &TerminalProvider,
     paths: &ProfilePaths,
 ) -> Result<ShortcutScan, ShortcutError> {
+    if let Some(reason) = provider_readiness(provider) {
+        return Err(ShortcutError::NotReady(reason));
+    }
     let holders = editor_holders(paths);
     let decisions = load_decisions(paths);
     let (terminal, occupied) = match provider.kind {
@@ -1037,11 +1045,12 @@ fn find_executable(name: &str, environment: &BTreeMap<OsString, OsString>) -> Op
     let path = environment.get(OsStr::new("PATH"))?;
     std::env::split_paths(path)
         .map(|directory| directory.join(name))
-        .find(|candidate| {
-            fs::metadata(candidate).is_ok_and(|metadata| {
-                metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
-            })
-        })
+        .find(|candidate| is_executable(candidate))
+}
+
+fn is_executable(path: &Path) -> bool {
+    fs::metadata(path)
+        .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
 }
 
 fn ghostty_config_dir(home: &Path, environment: &BTreeMap<OsString, OsString>) -> PathBuf {
@@ -1163,15 +1172,15 @@ mod tests {
     fn detects_provider_and_reports_missing_cli() {
         let root = TempDir::new().unwrap();
         let environment = environment(&root, "ghostty");
+        let provider = detect_provider(root.path(), &environment).unwrap();
         assert_eq!(
-            detect_provider(root.path(), &environment)
-                .unwrap()
-                .unwrap_err(),
-            "the ghostty cli is not on PATH, so its keybinds cannot be read"
+            provider_readiness(&provider).as_deref(),
+            Some("the ghostty cli is not on PATH, so its keybinds cannot be read")
         );
         executable(&root.path().join("bin/ghostty"), "exit 0");
-        let provider = detect_provider(root.path(), &environment).unwrap().unwrap();
+        let provider = detect_provider(root.path(), &environment).unwrap();
         assert_eq!(provider.kind, TerminalKind::Ghostty);
+        assert_eq!(provider_readiness(&provider), None);
     }
 
     #[test]
@@ -1189,7 +1198,7 @@ mod tests {
             r#"[{"key":"ctrl+p","command":"workbench.action.quickOpen"}]"#,
         )
         .unwrap();
-        let provider = detect_provider(root.path(), &environment).unwrap().unwrap();
+        let provider = detect_provider(root.path(), &environment).unwrap();
         let scan = scan_shortcuts(&provider, &paths).unwrap();
         assert_eq!(scan.terminal.len(), 1);
         assert_eq!(scan.terminal[0].editor_id, "ctrl+p");
@@ -1205,7 +1214,7 @@ mod tests {
             r#"printf '%s\n' '{"binds":[{"trigger":"ctrl+c","action":"copy_to_clipboard","sequences":[]}],"docs":{}}'"#,
         );
         let paths = ProfilePaths::from_environment(root.path(), &environment);
-        let provider = detect_provider(root.path(), &environment).unwrap().unwrap();
+        let provider = detect_provider(root.path(), &environment).unwrap();
         let scan = scan_shortcuts(&provider, &paths).unwrap();
         assert_eq!(scan.terminal.len(), 1);
         assert!(scan.terminal[0].shared.is_some());
