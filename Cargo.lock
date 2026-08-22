@@ -1359,6 +1359,7 @@ dependencies = [
 name = "tode-profile"
 version = "0.1.0"
 dependencies = [
+ "nix",
  "serde",
  "serde_json",
  "tempfile",

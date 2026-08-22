@@ -5,6 +5,8 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use nix::sys::signal::{Signal, kill};
+use nix::unistd::Pid;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tode_core::{
@@ -1134,6 +1136,74 @@ pub(crate) fn words(value: &str) -> String {
     output.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProcessInfo {
+    ppid: i32,
+    command: String,
+}
+
+pub fn reload_provider(provider: &TerminalProvider) -> bool {
+    let signal = match provider.kind {
+        TerminalKind::Ghostty => Signal::SIGUSR2,
+        TerminalKind::Kitty => Signal::SIGUSR1,
+    };
+    reload_with(
+        provider.kind,
+        i32::try_from(std::process::id()).unwrap_or(i32::MAX),
+        process_info,
+        |pid| kill(Pid::from_raw(pid), signal).map_err(|_| ()),
+    )
+}
+
+fn reload_with(
+    kind: TerminalKind,
+    start_pid: i32,
+    mut info: impl FnMut(i32) -> Option<ProcessInfo>,
+    mut signal: impl FnMut(i32) -> Result<(), ()>,
+) -> bool {
+    let wanted = match kind {
+        TerminalKind::Ghostty => "ghostty",
+        TerminalKind::Kitty => "kitty",
+    };
+    let mut pid = start_pid;
+    for _ in 0..16 {
+        let Some(current) = info(pid) else {
+            return false;
+        };
+        if current.ppid <= 1 {
+            return false;
+        }
+        let Some(parent) = info(current.ppid) else {
+            return false;
+        };
+        let basename = Path::new(&parent.command)
+            .file_name()
+            .and_then(OsStr::to_str)
+            .unwrap_or(&parent.command);
+        if basename.eq_ignore_ascii_case(wanted) {
+            return signal(current.ppid).is_ok();
+        }
+        pid = current.ppid;
+    }
+    false
+}
+
+fn process_info(pid: i32) -> Option<ProcessInfo> {
+    let output = Command::new("ps")
+        .args(["-o", "ppid=,comm=", "-p", &pid.to_string()])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let source = String::from_utf8(output.stdout).ok()?;
+    let source = source.trim();
+    let split = source.find(char::is_whitespace)?;
+    let ppid = source[..split].parse().ok()?;
+    let command = source[split..].trim().to_owned();
+    (!command.is_empty()).then_some(ProcessInfo { ppid, command })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1249,5 +1319,60 @@ mod tests {
         );
         let parsed: Vec<Binding> = parse_jsonc(&String::from_utf8(first).unwrap()).unwrap();
         assert!(parsed.iter().any(|binding| binding.command == "mine"));
+    }
+    #[test]
+    fn reload_walks_ancestry_and_signals_terminal_parent() {
+        let processes = BTreeMap::from([
+            (
+                100,
+                ProcessInfo {
+                    ppid: 90,
+                    command: "tode".into(),
+                },
+            ),
+            (
+                90,
+                ProcessInfo {
+                    ppid: 80,
+                    command: "/bin/zsh".into(),
+                },
+            ),
+            (
+                80,
+                ProcessInfo {
+                    ppid: 70,
+                    command: "/Applications/Ghostty.app/Contents/MacOS/ghostty".into(),
+                },
+            ),
+        ]);
+        let mut signaled = None;
+        assert!(reload_with(
+            TerminalKind::Ghostty,
+            100,
+            |pid| processes.get(&pid).cloned(),
+            |pid| {
+                signaled = Some(pid);
+                Ok(())
+            },
+        ));
+        assert_eq!(signaled, Some(80));
+    }
+
+    #[test]
+    fn reload_stops_after_sixteen_hops() {
+        let mut signaled = false;
+        assert!(!reload_with(
+            TerminalKind::Kitty,
+            100,
+            |pid| Some(ProcessInfo {
+                ppid: pid - 1,
+                command: "/bin/shell".into(),
+            }),
+            |_| {
+                signaled = true;
+                Ok(())
+            },
+        ));
+        assert!(!signaled);
     }
 }

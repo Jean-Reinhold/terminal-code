@@ -21,7 +21,7 @@ use tode_core::{
 use tode_profile::shortcut_manager::ShortcutSession;
 use tode_profile::shortcuts::{
     TerminalKind, auto_apply_shared, detect_provider, install_shortcut_keybindings, load_decisions,
-    provider_readiness, scan_shortcuts, undo_shortcuts,
+    provider_readiness, reload_provider, scan_shortcuts, undo_shortcuts,
 };
 use tode_profile::{
     FONT_FAMILY, ProfilePaths, UninstallConfig, find_editors, install_settings, install_theme,
@@ -240,6 +240,14 @@ async fn open(
     install_theme(paths, &palette).map_err(|error| format!("install theme: {error}"))?;
     install_shortcut_keybindings(paths, load_decisions(paths).as_ref())
         .map_err(|error| format!("install keybindings: {error}"))?;
+    if let Some(home) = environment.get(&OsString::from("HOME")).map(PathBuf::from)
+        && let Some(provider) = detect_provider(&home, environment)
+        && provider_readiness(&provider).is_none()
+        && let Ok(scan) = scan_shortcuts(&provider, paths)
+        && auto_apply_shared(&provider, paths, &scan).unwrap_or(false)
+    {
+        let _ = reload_provider(&provider);
+    }
     let css = injected_css(&tode_core::hex(palette.background), FONT_FAMILY);
     let css_file = paths.data.join("inject.css");
     write_if_changed(&css_file, css.as_bytes()).map_err(|error| format!("install CSS: {error}"))?;
@@ -598,7 +606,9 @@ async fn shortcut_setup(
                 "removed tode's {} overrides and editor chords",
                 provider.name
             );
-            println!("{reload_hint}");
+            if !outcome.terminal_changed || !reload_provider(&provider) {
+                println!("{reload_hint}");
+            }
         } else {
             println!("nothing to undo");
         }
@@ -616,6 +626,7 @@ async fn shortcut_setup(
     }
     let mut scan = scan_shortcuts(&provider, paths).map_err(|error| error.to_string())?;
     if auto_apply_shared(&provider, paths, &scan).map_err(|error| error.to_string())? {
+        let _ = reload_provider(&provider);
         scan = scan_shortcuts(&provider, paths).map_err(|error| error.to_string())?;
     }
     if scan
@@ -665,6 +676,7 @@ async fn shortcut_setup(
     .map_err(|error| format!("wait for terminal-browser: {error}"))?;
     let served = manager.served();
     let confirmed = manager.confirmed();
+    let reloaded = manager.reloaded();
     manager.close().await;
     let code = status.code().unwrap_or(0).clamp(0, 255) as u8;
     if !served {
@@ -672,7 +684,7 @@ async fn shortcut_setup(
             "tode: the shortcuts wizard never reached the screen (terminal-browser exited {code})"
         );
     }
-    if confirmed {
+    if confirmed && !reloaded {
         println!("{reload_hint}");
     }
     Ok(ShortcutOutcome {

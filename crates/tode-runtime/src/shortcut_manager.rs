@@ -16,6 +16,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use tode_core::Decision;
 use tode_profile::shortcut_manager::{ClaimInfo, DecisionKind, ManagerRowKind, ShortcutSession};
+use tode_profile::shortcuts::reload_provider;
 use tokio::net::TcpListener;
 use tokio::sync::{oneshot, watch};
 use tokio::task::JoinHandle;
@@ -28,6 +29,16 @@ pub struct ShortcutManagerConfig {
     pub intro: bool,
     pub continues: bool,
 }
+#[derive(Debug)]
+struct ManagerShared {
+    session: Mutex<ShortcutSession>,
+    config: ShortcutManagerConfig,
+    served: Arc<AtomicBool>,
+    confirmed: Arc<AtomicBool>,
+    reloaded: Arc<AtomicBool>,
+    done: watch::Sender<bool>,
+    token: String,
+}
 
 #[derive(Debug)]
 pub struct ShortcutManager {
@@ -35,6 +46,7 @@ pub struct ShortcutManager {
     token: String,
     served: Arc<AtomicBool>,
     confirmed: Arc<AtomicBool>,
+    reloaded: Arc<AtomicBool>,
     done: watch::Receiver<bool>,
     shutdown: Option<oneshot::Sender<()>>,
     task: Option<JoinHandle<()>>,
@@ -49,15 +61,20 @@ impl ShortcutManager {
             TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0)).await?;
         let address = listener.local_addr()?;
         let token = manager_token()?;
-        let session = Arc::new(Mutex::new(session));
-        let config = Arc::new(config);
         let served = Arc::new(AtomicBool::new(false));
         let confirmed = Arc::new(AtomicBool::new(false));
+        let reloaded = Arc::new(AtomicBool::new(false));
         let (done_tx, done) = watch::channel(false);
+        let shared = Arc::new(ManagerShared {
+            session: Mutex::new(session),
+            config,
+            served: served.clone(),
+            confirmed: confirmed.clone(),
+            reloaded: reloaded.clone(),
+            done: done_tx,
+            token: token.clone(),
+        });
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
-        let task_served = served.clone();
-        let task_confirmed = confirmed.clone();
-        let task_token = Arc::new(token.clone());
         let task = tokio::spawn(async move {
             loop {
                 let accepted = tokio::select! {
@@ -67,24 +84,10 @@ impl ShortcutManager {
                 let Ok((stream, _)) = accepted else {
                     break;
                 };
-                let session = session.clone();
-                let config = config.clone();
-                let served = task_served.clone();
-                let confirmed = task_confirmed.clone();
-                let done = done_tx.clone();
-                let token = task_token.clone();
+                let shared = shared.clone();
                 tokio::spawn(async move {
-                    let service = hyper::service::service_fn(move |request| {
-                        handle(
-                            request,
-                            session.clone(),
-                            config.clone(),
-                            served.clone(),
-                            confirmed.clone(),
-                            done.clone(),
-                            token.clone(),
-                        )
-                    });
+                    let service =
+                        hyper::service::service_fn(move |request| handle(request, shared.clone()));
                     let _ = http1::Builder::new()
                         .serve_connection(TokioIo::new(stream), service)
                         .await;
@@ -96,6 +99,7 @@ impl ShortcutManager {
             token,
             served,
             confirmed,
+            reloaded,
             done,
             shutdown: Some(shutdown_tx),
             task: Some(task),
@@ -115,6 +119,9 @@ impl ShortcutManager {
 
     pub fn confirmed(&self) -> bool {
         self.confirmed.load(Ordering::SeqCst)
+    }
+    pub fn reloaded(&self) -> bool {
+        self.reloaded.load(Ordering::SeqCst)
     }
 
     pub async fn wait_done(&mut self) {
@@ -145,14 +152,16 @@ impl Drop for ShortcutManager {
 
 async fn handle(
     request: Request<Incoming>,
-    session: Arc<Mutex<ShortcutSession>>,
-    config: Arc<ShortcutManagerConfig>,
-    served: Arc<AtomicBool>,
-    confirmed: Arc<AtomicBool>,
-    done: watch::Sender<bool>,
-    token: Arc<String>,
+    shared: Arc<ManagerShared>,
 ) -> Result<Response<Full<Bytes>>, Infallible> {
     let method = request.method().clone();
+    let session = &shared.session;
+    let config = &shared.config;
+    let served = &shared.served;
+    let confirmed = &shared.confirmed;
+    let reloaded = &shared.reloaded;
+    let done = &shared.done;
+    let token = &shared.token;
     let scoped = format!("/{token}");
     let scoped_prefix = format!("{scoped}/");
     let raw_path = request.uri().path();
@@ -275,13 +284,26 @@ async fn handle(
             Err(response) => *response,
         },
         (Method::POST, "/confirm") => {
-            let result = session.lock().expect("shortcut session lock").confirm();
+            let (result, reloaded_live) = {
+                let mut session = session.lock().expect("shortcut session lock");
+                let result = session.confirm();
+                let reloaded_live = result.is_ok() && reload_provider(session.provider());
+                (result, reloaded_live)
+            };
             match result {
                 Ok(_) => {
                     confirmed.store(true, Ordering::SeqCst);
+                    reloaded.store(reloaded_live, Ordering::SeqCst);
                     json_response(
                         StatusCode::OK,
-                        &json!({"ok": true, "note": format!("applied — {}", config.reload_hint)}),
+                        &json!({
+                            "ok": true,
+                            "note": if reloaded_live {
+                                "applied".to_owned()
+                            } else {
+                                format!("applied — {}", config.reload_hint)
+                            }
+                        }),
                     )
                 }
                 Err(error) => json_response(
