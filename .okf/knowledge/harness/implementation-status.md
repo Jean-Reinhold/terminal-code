@@ -41,11 +41,11 @@ sources:
 
 # Verified Behavior
 
-* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 132 contract-mapped Rust tests.
+* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 133 contract-mapped Rust tests.
 * C01 Rust help/version scenarios matched exact snapshots captured from the legacy CLI.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* One hundred forty-six Rust workspace tests passed:
+* One hundred forty-seven Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
   - CLI help completeness and version receipt/fallback;
@@ -79,6 +79,7 @@ sources:
   - one bounded token-scoped embedded manager HTTP decision/apply/done integration test;
   - five production shortcut unsupported/readiness/undo/no-conflict/non-TTY command integration tests;
   - two exact terminal-ancestry/signal and bounded-hop reload tests;
+  - one exact Ghostty action-document first-sentence parser test;
   - five profile path/precedence/idempotence/atomic-install tests;
   - six import discovery/progress/settings/keybindings/snippets/tasks/extensions safety/report tests;
   - two managed theme extension/registry/live-file cleanup/idempotence tests;
@@ -112,7 +113,7 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Not Implemented Yet
 
-* Remaining shortcut action-document/full adversarial/scenario translation and direct dual-target differential execution.
+* Remaining shortcut full adversarial/scenario translation and direct dual-target differential execution.
 * Executable scenarios for C03-C04 and C06-C22; their concepts and legacy test mappings are complete.
 * PTY/OSC, browser, terminal hardware, release/R2, and install scenario adapters.
 * Hard S2/S3 isolation, total resource budgets, fault injection, and crash resumption.
@@ -121,4 +122,4 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Next Slice
 
-Continue M5 with action documentation and full shortcut-loop/scenario translation, then M4/C15 generated host ABI and real multi-socket fan-out certification.
+Continue M5 with full shortcut-loop/scenario translation, then M4/C15 generated host ABI and real multi-socket fan-out certification.

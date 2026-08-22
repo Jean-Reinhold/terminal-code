@@ -5,7 +5,7 @@ contract_id: C13
 description: Preserve terminal detection, key syntax, conflict derivation, isolated config edits, reload, and undo.
 tags: [shortcuts, ghostty, kitty, terminal]
 status: draft
-implementation_status: rust-production-service-parity
+implementation_status: rust-production-parity
 risk: critical
 owners: [shortcuts]
 surfaces: [filesystem, process, terminal]
@@ -29,4 +29,4 @@ Preserve environment/binary/config detection, effective/default key parsing, edi
 
 # Coverage Status
 
-Rust tests cover chord conversion, Ghostty/Kitty config transforms, provider detection/readiness, real executable keymap ingestion, effective conflict discovery, shared Kitty convergence, byte-idempotent owned-file writes, clean undo without a terminal CLI, unsupported/no-conflict/non-TTY command behavior, foreign editor-binding preservation, exact 16-hop ancestry matching, and Ghostty/Kitty signal selection. C13 remains draft until action documentation and isolated real-terminal scenarios are ported.
+Rust tests cover chord conversion, Ghostty/Kitty config transforms, provider detection/readiness, real executable keymap ingestion, effective conflict discovery, Ghostty first-sentence action documentation, shared Kitty convergence, byte-idempotent owned-file writes, clean undo without a terminal CLI, unsupported/no-conflict/non-TTY command behavior, foreign editor-binding preservation, exact 16-hop ancestry matching, and Ghostty/Kitty signal selection. C13 remains draft only for isolated real-terminal scenario certification.

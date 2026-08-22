@@ -459,6 +459,9 @@ fn scan_ghostty(
     decisions: Option<&Decisions>,
 ) -> Result<(Vec<ShortcutConflict>, BTreeMap<String, String>), ShortcutError> {
     let output = run(&provider.binary, &["+list-keybinds"])?;
+    let docs = run(&provider.binary, &["+list-actions", "--docs"])
+        .map(|source| parse_action_docs(&source))
+        .unwrap_or_default();
     let freed = ghostty_freed(&provider.config_dir);
     let mut seen = BTreeSet::new();
     let mut conflicts = Vec::new();
@@ -488,6 +491,7 @@ fn scan_ghostty(
             effective,
             holders,
             decisions,
+            &docs,
             &mut seen,
             &mut conflicts,
         );
@@ -498,6 +502,7 @@ fn scan_ghostty(
             None,
             holders,
             decisions,
+            &docs,
             &mut seen,
             &mut conflicts,
         );
@@ -510,6 +515,7 @@ fn consider_ghostty(
     current: Option<String>,
     holders: &BTreeMap<String, Vec<EditorHold>>,
     decisions: Option<&Decisions>,
+    docs: &BTreeMap<String, String>,
     seen: &mut BTreeSet<String>,
     conflicts: &mut Vec<ShortcutConflict>,
 ) {
@@ -527,6 +533,11 @@ fn consider_ghostty(
         .as_deref()
         .map(words)
         .unwrap_or_else(|| "what it ran before".into());
+    let described = current
+        .as_deref()
+        .and_then(|action| docs.get(action.split(':').next().unwrap_or(action)))
+        .cloned()
+        .unwrap_or_else(|| doing.clone());
     let primary = found[0].clone();
     let means = primary
         .describes
@@ -539,11 +550,59 @@ fn consider_ghostty(
         editor: primary,
         others: found[1..].to_vec(),
         in_terminal: format!("runs {doing} in Ghostty, so {means} never reaches the editor"),
-        short: doing.clone(),
+        short: described,
         freed: format!("{doing} goes"),
         tradeoff: format!("Ghostty's {doing} stops working"),
         shared: None,
     });
+}
+fn parse_action_docs(source: &str) -> BTreeMap<String, String> {
+    let mut docs = BTreeMap::new();
+    let mut action = None;
+    let mut lines = Vec::new();
+    for line in source.lines() {
+        let trimmed = line.trim();
+        let heading = (!line.starts_with(char::is_whitespace))
+            .then(|| trimmed.strip_suffix(':'))
+            .flatten()
+            .filter(|name| {
+                !name.is_empty()
+                    && name.chars().all(|character| {
+                        character.is_ascii_lowercase()
+                            || character.is_ascii_digit()
+                            || character == '_'
+                    })
+            });
+        if let Some(heading) = heading {
+            insert_action_doc(&mut docs, action.take(), &mut lines);
+            action = Some(heading.to_owned());
+        } else if action.is_some() && line.starts_with(char::is_whitespace) && !trimmed.is_empty() {
+            lines.push(trimmed.to_owned());
+        }
+    }
+    insert_action_doc(&mut docs, action, &mut lines);
+    docs
+}
+
+fn insert_action_doc(
+    docs: &mut BTreeMap<String, String>,
+    action: Option<String>,
+    lines: &mut Vec<String>,
+) {
+    let Some(action) = action else {
+        lines.clear();
+        return;
+    };
+    if lines.is_empty() {
+        return;
+    }
+    let text = lines.join(" ");
+    let sentence = text
+        .split_once(". ")
+        .map_or(text.as_str(), |(sentence, _)| sentence)
+        .trim_end_matches('.');
+    docs.insert(action, sentence.to_owned());
+    lines.clear();
 }
 
 fn scan_kitty(
@@ -1374,5 +1433,13 @@ mod tests {
             },
         ));
         assert!(!signaled);
+    }
+    #[test]
+    fn parses_ghostty_action_docs_first_sentence() {
+        let docs = parse_action_docs(
+            "new_tab:\n  Opens a new tab. More detail follows.\n\nclose_tab:\n  Closes the current tab.\n",
+        );
+        assert_eq!(docs["new_tab"], "Opens a new tab");
+        assert_eq!(docs["close_tab"], "Closes the current tab");
     }
 }
