@@ -33,3 +33,4 @@
 * **M4 downloaded runtime**: Composed release lookup, exact verified download, strip-one safe extraction, usability validation, tarball cleanup, and launcher creation.
 * **M4 daemon command**: Added persistent `tode-daemon` readiness JSON, SIGTERM/Ctrl-C handling, child shutdown, and state cleanup with real Rust-binary integration.
 * **M6 basic working CLI**: Added production Rust `tode` help/version/open/shutdown, fallback profile/theme/CSS, persistent daemon start/reuse, terminal-browser launch, and end-to-end Rust-only integration.
+* **M6 existing-window reuse**: Added Rust goto/add/diff/new/reuse/wait/review/split/size parsing and production `TODE_IPC` goto/wait/review reuse integration.

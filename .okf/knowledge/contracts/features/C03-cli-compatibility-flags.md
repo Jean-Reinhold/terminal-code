@@ -5,15 +5,18 @@ contract_id: C03
 description: Preserve accepted ignored flags and warning-only unsupported extension-isolation flags.
 tags: [cli, compatibility, flags]
 status: draft
+implementation_status: rust-parser-partial
 risk: medium
 owners: [cli]
 surfaces: [cli]
-source_paths: [src/main.ts]
+source_paths: [src/main.ts, crates/tode-cli/src/main.rs]
 scenario_ids: []
 legacy_test_paths: []
+rust_test_paths: [crates/tode-cli/src/main.rs]
 platforms: [macos, linux]
 sources:
   - { id: main, resource: ../../../../src/main.ts, title: Current CLI parser }
+  - { id: rust, resource: ../../../../crates/tode-cli/src/main.rs, title: Rust open-option parser }
 ---
 
 # Contract
@@ -22,4 +25,4 @@ Flags in `IGNORED` and `IGNORED_WITH_VALUE` are consumed without becoming unknow
 
 # Coverage Status
 
-No current Node test covers this contract. H3 must add Bash/Rust black-box scenarios before C03 can become stable.
+Rust tests cover goto/add/diff/new/reuse/wait/review/split/size parsing and invalid values. C03 remains draft until ignored VS Code flags and warning-only extension-isolation flags are ported exactly.

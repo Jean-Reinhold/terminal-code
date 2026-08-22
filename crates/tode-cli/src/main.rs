@@ -4,12 +4,16 @@ use std::ffi::OsString;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
+use std::os::unix::fs::FileTypeExt;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 use std::time::Duration;
 
-use tode_core::{HELP, installed_version, resolve_target, with_fallbacks, workbench_url};
+use tode_core::{
+    HELP, OpenFile, OpenRequest, installed_version, parse_goto, resolve_target, send_to_extension,
+    with_fallbacks, workbench_url,
+};
 use tode_profile::{FONT_FAMILY, ProfilePaths, install_settings, install_theme, write_if_changed};
 use tode_runtime::{
     BrowserHomes, RuntimeRoots, ServerState, current_server, injected_css, resolve_runtime,
@@ -19,12 +23,26 @@ use tode_runtime::{
 const TERMINAL_BROWSER_VERSION: &str = "v0.5.8";
 const CODE_SERVER_VERSION: &str = "4.132.0";
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+struct OpenOptions {
+    paths: Vec<String>,
+    goto: bool,
+    add: bool,
+    diff: bool,
+    new_window: bool,
+    reuse: bool,
+    wait: bool,
+    split: Option<String>,
+    size: Option<String>,
+    review: bool,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 enum CliCommand {
     Help,
     Version,
     Shutdown,
-    Open(Vec<String>),
+    Open(OpenOptions),
 }
 
 #[tokio::main]
@@ -66,17 +84,77 @@ async fn execute() -> Result<u8, String> {
             );
             Ok(0)
         }
-        CliCommand::Open(arguments) => open(arguments, &paths, &environment).await,
+        CliCommand::Open(options) => open(options, &paths, &environment).await,
     }
 }
 
 async fn open(
-    arguments: Vec<String>,
+    options: OpenOptions,
     paths: &ProfilePaths,
     environment: &BTreeMap<OsString, OsString>,
 ) -> Result<u8, String> {
     let cwd = env::current_dir().map_err(|error| error.to_string())?;
-    let target = resolve_target(arguments.first().map(String::as_str), &cwd);
+    let files = open_files(&options, &cwd)?;
+    let wanted: Vec<_> = if options.goto || options.diff {
+        Vec::new()
+    } else {
+        options
+            .paths
+            .iter()
+            .map(|path| resolve_target(Some(path), &cwd))
+            .collect()
+    };
+    let folders: Vec<String> = wanted
+        .iter()
+        .filter_map(|target| target.folder.as_ref())
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect();
+    let diff = if options.diff {
+        Some(
+            options
+                .paths
+                .iter()
+                .map(|path| absolute(&cwd, path).to_string_lossy().into_owned())
+                .collect(),
+        )
+    } else {
+        None
+    };
+    if !options.new_window
+        && let Some(socket) = running_window(environment)
+    {
+        let here = options.add || options.reuse;
+        let send_folders = if here { folders.clone() } else { Vec::new() };
+        let opens_pane = !folders.is_empty() && !here;
+        if !opens_pane
+            && (!files.is_empty() || !send_folders.is_empty() || diff.is_some() || options.review)
+        {
+            let request = OpenRequest {
+                files,
+                folders: send_folders,
+                add: options.add,
+                wait: Some(options.wait),
+                diff,
+                view: options.review.then(|| "scm".into()),
+                theme: None,
+            };
+            let timeout = (!options.wait).then_some(Duration::from_secs(4));
+            tokio::task::spawn_blocking(move || send_to_extension(&socket, &request, timeout))
+                .await
+                .map_err(|error| format!("IPC task failed: {error}"))?
+                .map_err(|error| format!("could not reach the tode window: {error}"))?;
+            return Ok(0);
+        }
+    }
+    if options.goto || options.diff || options.review || options.add || options.reuse {
+        return Err(
+            "goto/add/diff/review/reuse requires an existing Rust bridge window for now".into(),
+        );
+    }
+    if options.paths.len() > 1 {
+        return Err("multiple new-window targets require the Rust bridge for now".into());
+    }
+    let target = resolve_target(options.paths.first().map(String::as_str), &cwd);
     let palette = with_fallbacks(None);
     install_settings(paths).map_err(|error| format!("install settings: {error}"))?;
     install_theme(paths, &palette).map_err(|error| format!("install theme: {error}"))?;
@@ -111,8 +189,15 @@ async fn open(
     )
     .await
     .map_err(|error| error.to_string())?;
+    let mut browser_arguments = vec!["open".to_owned(), url, "--app-mode".to_owned()];
+    if let Some(split) = options.split {
+        browser_arguments.extend(["--split".into(), split]);
+    }
+    if let Some(size) = options.size {
+        browser_arguments.extend(["--size".into(), size]);
+    }
     let status = Command::new(&runtime.bin)
-        .args(["open", &url, "--app-mode"])
+        .args(browser_arguments)
         .status()
         .map_err(|error| format!("could not start terminal-browser: {error}"))?;
     Ok(status.code().unwrap_or(1).clamp(0, 255) as u8)
@@ -201,19 +286,103 @@ fn start_daemon(
 
 fn parse_command(arguments: Vec<String>) -> Result<CliCommand, String> {
     match arguments.as_slice() {
-        [flag] if matches!(flag.as_str(), "--help" | "-h") => Ok(CliCommand::Help),
-        [flag] if matches!(flag.as_str(), "--version" | "-v") => Ok(CliCommand::Version),
-        [flag] if flag == "--shutdown" => Ok(CliCommand::Shutdown),
-        values if values.iter().any(|value| value.starts_with('-')) => {
-            let unknown = values
-                .iter()
-                .find(|value| value.starts_with('-'))
-                .expect("checked above");
-            Err(format!("unknown option {unknown}"))
-        }
-        values if values.len() <= 1 => Ok(CliCommand::Open(values.to_vec())),
-        _ => Err("multiple targets are not implemented in the Rust CLI yet".into()),
+        [flag] if matches!(flag.as_str(), "--help" | "-h") => return Ok(CliCommand::Help),
+        [flag] if matches!(flag.as_str(), "--version" | "-v") => return Ok(CliCommand::Version),
+        [flag] if flag == "--shutdown" => return Ok(CliCommand::Shutdown),
+        _ => {}
     }
+    let mut options = OpenOptions::default();
+    let mut index = 0;
+    while index < arguments.len() {
+        let argument = &arguments[index];
+        match argument.as_str() {
+            "-g" | "--goto" => options.goto = true,
+            "-a" | "--add" => options.add = true,
+            "-d" | "--diff" => options.diff = true,
+            "-n" | "--new-window" => options.new_window = true,
+            "-r" | "--reuse-window" => options.reuse = true,
+            "-w" | "--wait" => options.wait = true,
+            "--review" => options.review = true,
+            "--split" | "--size" => {
+                let value = arguments
+                    .get(index + 1)
+                    .ok_or_else(|| format!("{argument} needs a value"))?
+                    .clone();
+                if argument == "--split" {
+                    if !matches!(value.as_str(), "right" | "left" | "down" | "up") {
+                        return Err(format!("invalid --split direction {value}"));
+                    }
+                    options.split = Some(value);
+                } else {
+                    let fraction = value
+                        .parse::<f64>()
+                        .map_err(|error| format!("invalid --size: {error}"))?;
+                    if !(0.2..=0.95).contains(&fraction) {
+                        return Err("--size must be between 0.2 and 0.95".into());
+                    }
+                    options.size = Some(value);
+                }
+                index += 1;
+            }
+            value if value.starts_with('-') => return Err(format!("unknown option {value}")),
+            value => options.paths.push(value.to_owned()),
+        }
+        index += 1;
+    }
+    if options.size.is_some() && options.split.is_none() {
+        return Err("--size only applies with --split".into());
+    }
+    if options.diff && options.paths.len() != 2 {
+        return Err("--diff takes two files".into());
+    }
+    Ok(CliCommand::Open(options))
+}
+
+fn running_window(environment: &BTreeMap<OsString, OsString>) -> Option<PathBuf> {
+    let path = environment
+        .get(&OsString::from("TODE_IPC"))
+        .map(PathBuf::from)?;
+    fs::metadata(&path)
+        .ok()
+        .filter(|metadata| metadata.file_type().is_socket())
+        .map(|_| path)
+}
+
+fn open_files(options: &OpenOptions, cwd: &Path) -> Result<Vec<OpenFile>, String> {
+    if options.diff {
+        return Ok(Vec::new());
+    }
+    if options.goto {
+        return Ok(options
+            .paths
+            .iter()
+            .map(|argument| {
+                let mut file = parse_goto(argument, cwd);
+                file.path = absolute(cwd, &file.path).to_string_lossy().into_owned();
+                file
+            })
+            .collect());
+    }
+    Ok(options
+        .paths
+        .iter()
+        .filter_map(|path| {
+            let target = resolve_target(Some(path), cwd);
+            target.file.map(|file| OpenFile {
+                path: file.to_string_lossy().into_owned(),
+                line: None,
+                column: None,
+            })
+        })
+        .collect())
+}
+
+fn absolute(cwd: &Path, value: &str) -> PathBuf {
+    let target = resolve_target(Some(value), cwd);
+    target
+        .file
+        .or(target.folder)
+        .unwrap_or_else(|| cwd.to_path_buf())
 }
 
 fn default_daemon_path() -> PathBuf {
@@ -243,7 +412,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_identity_shutdown_and_single_open() {
+    fn parses_identity_shutdown_and_default_open() {
         assert_eq!(
             parse_command(vec!["--help".into()]).unwrap(),
             CliCommand::Help
@@ -258,13 +427,66 @@ mod tests {
         );
         assert_eq!(
             parse_command(Vec::new()).unwrap(),
-            CliCommand::Open(Vec::new())
+            CliCommand::Open(OpenOptions::default())
         );
+    }
+
+    #[test]
+    fn parses_goto_add_diff_wait_review_and_split_options() {
+        let goto = parse_command(vec![
+            "--goto".into(),
+            "--wait".into(),
+            "src/main.rs:12:4".into(),
+        ])
+        .unwrap();
         assert_eq!(
-            parse_command(vec!["folder".into()]).unwrap(),
-            CliCommand::Open(vec!["folder".into()])
+            goto,
+            CliCommand::Open(OpenOptions {
+                paths: vec!["src/main.rs:12:4".into()],
+                goto: true,
+                wait: true,
+                ..OpenOptions::default()
+            })
         );
+        let split = parse_command(vec![
+            "--new-window".into(),
+            "--split".into(),
+            "right".into(),
+            "--size".into(),
+            "0.4".into(),
+            "folder".into(),
+        ])
+        .unwrap();
+        assert_eq!(
+            split,
+            CliCommand::Open(OpenOptions {
+                paths: vec!["folder".into()],
+                new_window: true,
+                split: Some("right".into()),
+                size: Some("0.4".into()),
+                ..OpenOptions::default()
+            })
+        );
+        assert!(matches!(
+            parse_command(vec!["--diff".into(), "a".into(), "b".into()]).unwrap(),
+            CliCommand::Open(OpenOptions { diff: true, .. })
+        ));
+    }
+
+    #[test]
+    fn rejects_invalid_open_options() {
         assert!(parse_command(vec!["--diff".into()]).is_err());
-        assert!(parse_command(vec!["one".into(), "two".into()]).is_err());
+        assert!(parse_command(vec!["--size".into(), "0.5".into()]).is_err());
+        assert!(parse_command(vec!["--split".into(), "diagonal".into()]).is_err());
+        assert!(
+            parse_command(vec![
+                "--size".into(),
+                "1.5".into(),
+                "--split".into(),
+                "right".into()
+            ])
+            .is_err()
+        );
+        assert!(parse_command(vec!["--unknown".into()]).is_err());
     }
 }
