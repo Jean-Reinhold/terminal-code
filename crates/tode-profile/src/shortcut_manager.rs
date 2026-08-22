@@ -135,7 +135,8 @@ impl ShortcutSession {
         normalize_chord(chord)
     }
 
-    pub fn rows(&self) -> Vec<ManagerRow> {
+    pub fn rows(&mut self) -> Vec<ManagerRow> {
+        self.refresh();
         let mut rows = Vec::new();
         let mut currents = BTreeMap::new();
         for conflict in self
@@ -303,12 +304,15 @@ impl ShortcutSession {
     }
 
     pub fn taken(
-        &self,
+        &mut self,
         chord: &str,
         row_id: Option<&str>,
         command: Option<&str>,
         side: Option<ManagerRowKind>,
     ) -> Option<TakenResult> {
+        self.refresh();
+        let normalized = normalize_chord(chord)?;
+        let chord = normalized.as_str();
         let conflict = row_id.and_then(|id| {
             self.scan
                 .terminal
@@ -442,6 +446,7 @@ impl ShortcutSession {
         side_claim: bool,
         info: Option<ClaimInfo>,
     ) {
+        self.refresh();
         let claim = kind == DecisionKind::Claim || side_claim;
         let key = if claim {
             info.as_ref().map_or_else(
@@ -459,6 +464,9 @@ impl ShortcutSession {
             self.drop_twin(id, kind, claim, info.as_ref(), &key);
             return;
         };
+        if let Some(normalized) = decision.key.as_deref().and_then(normalize_chord) {
+            decision.key = Some(normalized);
+        }
         if kind == DecisionKind::Import && decision.choice == DecisionChoice::Editor {
             decision.command = generated_bindings(None)
                 .into_iter()
@@ -512,12 +520,20 @@ impl ShortcutSession {
     }
 
     pub fn confirm(&mut self) -> Result<bool, ShortcutError> {
+        self.refresh();
         let decisions = Decisions {
             version: 1,
             terminal: terminal_id(&self.provider).into(),
             choices: self.staged.clone(),
         };
         apply_decisions(&self.provider, &self.paths, &self.scan.terminal, &decisions)
+    }
+
+    fn refresh(&mut self) {
+        if let Ok(scan) = scan_shortcuts(&self.provider, &self.paths) {
+            self.scan = scan;
+            self.holders = editor_holders(&self.paths);
+        }
     }
 
     fn drop_twin(
@@ -563,16 +579,35 @@ impl ShortcutSession {
     }
 
     fn staged_about(&self, chord: &str, command: &str, terminal: bool) -> Option<Decision> {
-        self.staged
+        let claim = self
+            .staged
             .get(&format!("claim:{chord}:{command}"))
-            .or_else(|| self.staged.get(&format!("claim:{chord}")))
-            .or_else(|| {
-                terminal
-                    .then(|| self.staged.get(chord))
-                    .flatten()
-                    .filter(|decision| decision.action.as_deref() == Some(command))
-            })
-            .cloned()
+            .or_else(|| self.staged.get(&format!("claim:{chord}")));
+        if let Some(claim) = claim
+            && claim.action.as_deref().unwrap_or(command) == command
+        {
+            return Some(claim.clone());
+        }
+        let row = self.staged.get(chord);
+        if terminal {
+            return row
+                .filter(|decision| {
+                    decision.choice == DecisionChoice::Terminal
+                        && decision.action.as_deref() == Some(command)
+                })
+                .cloned();
+        }
+        let translate = |decision: Option<&Decision>| {
+            let decision =
+                decision.filter(|decision| decision.command.as_deref() == Some(command))?;
+            if decision.choice == DecisionChoice::Keep {
+                return Some(decision_for_claim(None));
+            }
+            (decision.choice == DecisionChoice::Editor
+                && decision.key.as_deref().is_some_and(|key| key != chord))
+            .then(|| decision_for_claim(decision.key.clone()))
+        };
+        translate(row).or_else(|| translate(self.staged.get(&format!("import:{chord}"))))
     }
 
     fn follow_decision(
@@ -671,6 +706,17 @@ impl ShortcutSession {
     }
 }
 
+fn decision_for_claim(key: Option<String>) -> Decision {
+    Decision {
+        choice: DecisionChoice::Terminal,
+        key,
+        action: None,
+        guard: None,
+        owner_terminal: false,
+        command: None,
+    }
+}
+
 fn terminal_row(provider: &TerminalProvider, conflict: &ShortcutConflict) -> ManagerTerminal {
     ManagerTerminal {
         name: provider.name.into(),
@@ -713,11 +759,13 @@ mod tests {
     use std::ffi::OsString;
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
 
     use tempfile::TempDir;
+    use tode_core::Binding;
 
     use super::*;
-    use crate::shortcuts::detect_provider;
+    use crate::shortcuts::{detect_provider, undo_shortcuts};
 
     fn fixture() -> (TempDir, BTreeMap<OsString, OsString>, ProfilePaths) {
         let root = TempDir::new().unwrap();
@@ -882,5 +930,392 @@ mod tests {
             .map(|claim| (&claim.chord, &claim.command))
             .collect();
         assert_eq!(identities.len(), row.claims.len());
+    }
+    #[derive(Debug, Clone, Copy)]
+    enum Strategy {
+        Unset,
+        Keep,
+        EditorMove,
+        TerminalMove,
+        ContestedMove,
+    }
+
+    fn loop_fixture() -> (TempDir, BTreeMap<OsString, OsString>, ProfilePaths, String) {
+        let root = TempDir::new().unwrap();
+        let bin = root.path().join("bin");
+        let config = root.path().join("config/ghostty");
+        let owned = config.join("tode/keybinds.ghostty");
+        fs::create_dir_all(&bin).unwrap();
+        fs::create_dir_all(&config).unwrap();
+        fs::write(config.join("config"), "font-size = 14\n").unwrap();
+        let ghostty = bin.join("ghostty");
+        fs::write(
+            &ghostty,
+            format!(
+                "#!/bin/sh\nif [ \"$1\" = \"+list-actions\" ]; then\n  printf 'new_tab:\\n  Opens a new tab.\\nclose_surface:\\n  Closes a surface.\\n'\nelse\n  printf 'keybind = super+w=close_surface\\nkeybind = super+digit_1=goto_tab:1\\nkeybind = super+f=start_search\\nkeybind = super+t=new_tab\\nkeybind = super+alt+shift+z=close_tab\\n'\n  if [ -f '{}' ]; then cat '{}'; fi\nfi\n",
+                owned.display(),
+                owned.display()
+            ),
+        )
+        .unwrap();
+        let mut permissions = fs::metadata(&ghostty).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&ghostty, permissions).unwrap();
+        let environment = BTreeMap::from([
+            (OsString::from("PATH"), bin.into_os_string()),
+            (OsString::from("TERM_PROGRAM"), OsString::from("ghostty")),
+            (
+                OsString::from("XDG_DATA_HOME"),
+                root.path().join("data").into_os_string(),
+            ),
+            (
+                OsString::from("XDG_STATE_HOME"),
+                root.path().join("state").into_os_string(),
+            ),
+            (
+                OsString::from("XDG_CONFIG_HOME"),
+                root.path().join("config").into_os_string(),
+            ),
+        ]);
+        let paths = ProfilePaths::from_environment(root.path(), &environment);
+        fs::create_dir_all(&paths.user).unwrap();
+        fs::create_dir_all(&paths.extensions).unwrap();
+        let imported = serde_json::to_string(&vec![
+            Binding {
+                key: tode_core::quit_chord(cfg!(target_os = "macos")).into(),
+                command: "workbench.action.terminal.kill".into(),
+                when: None,
+            },
+            Binding {
+                key: "alt+w".into(),
+                command: "my.imported.closeThing".into(),
+                when: None,
+            },
+            Binding {
+                key: "cmd+1".into(),
+                command: "workbench.action.focusFirstEditorGroup".into(),
+                when: None,
+            },
+            Binding {
+                key: "cmd+w".into(),
+                command: "workbench.action.closeWindow".into(),
+                when: None,
+            },
+            Binding {
+                key: "cmd+f".into(),
+                command: "actions.find".into(),
+                when: None,
+            },
+            Binding {
+                key: "cmd+t".into(),
+                command: "workbench.action.newWindow".into(),
+                when: None,
+            },
+        ])
+        .unwrap();
+        fs::write(paths.user.join("keybindings.json"), &imported).unwrap();
+        let vim = paths.extensions.join("vscodevim.vim-1.30.0");
+        fs::create_dir(&vim).unwrap();
+        fs::write(
+            vim.join("package.json"),
+            r#"{"name":"vim","displayName":"Vim","contributes":{"keybindings":[{"key":"ctrl+d","mac":"cmd+d","command":"extension.vim_ctrl+d"},{"key":"alt+3","command":"extension.vim_window3","when":"vim.active"}]}}"#,
+        )
+        .unwrap();
+        let acme = paths.extensions.join("acme.keys-1.0.0");
+        fs::create_dir(&acme).unwrap();
+        fs::write(
+            acme.join("package.json"),
+            r#"{"name":"acme-keys","displayName":"Acme Keys","contributes":{"keybindings":[{"key":"ctrl+alt+k","command":"acme.everything"}]}}"#,
+        )
+        .unwrap();
+        (root, environment, paths, imported)
+    }
+
+    fn candidates() -> Vec<String> {
+        ["alt", "ctrl+alt", "shift+alt", "cmd+alt"]
+            .into_iter()
+            .flat_map(|modifiers| {
+                "abcdefghijklmnopqrstuvwxyz0123456789"
+                    .chars()
+                    .map(move |key| format!("{modifiers}+{key}"))
+            })
+            .collect()
+    }
+
+    fn row_chords(row: &ManagerRow) -> Vec<String> {
+        let mut chords = Vec::new();
+        let moved = if row.kind == ManagerRowKind::Import {
+            row.claim_decision
+                .as_ref()
+                .filter(|decision| decision.choice == DecisionChoice::Terminal)
+        } else {
+            row.decision
+                .as_ref()
+                .filter(|decision| decision.choice == DecisionChoice::Terminal)
+        };
+        if let Some(left) = moved.map_or(Some(row.id.as_str()), |decision| decision.key.as_deref())
+        {
+            chords.push(left.to_owned());
+        }
+        if row
+            .decision
+            .as_ref()
+            .is_none_or(|decision| decision.choice != DecisionChoice::Keep)
+        {
+            chords.push(
+                row.decision
+                    .as_ref()
+                    .filter(|decision| decision.choice == DecisionChoice::Editor)
+                    .and_then(|decision| decision.key.clone())
+                    .unwrap_or_else(|| row.id.clone()),
+            );
+        }
+        for claim in &row.claims {
+            if claim.resting == Some(true) && claim.decided.is_none() {
+                continue;
+            }
+            if let Some(chord) = claim
+                .decided
+                .as_ref()
+                .map_or(Some(claim.chord.as_str()), |decision| {
+                    decision.key.as_deref()
+                })
+            {
+                chords.push(chord.to_owned());
+            }
+        }
+        chords
+    }
+
+    fn unresolved(row: &ManagerRow) -> bool {
+        let mut counts = BTreeMap::new();
+        for chord in row_chords(row) {
+            *counts.entry(chord).or_insert(0_u8) += 1;
+        }
+        counts.values().any(|count| *count > 1)
+            || row
+                .claims
+                .iter()
+                .any(|claim| claim.resting != Some(true) && claim.decided.is_none())
+    }
+
+    struct PickRequest<'a> {
+        row_id: &'a str,
+        command: Option<&'a str>,
+        side: Option<ManagerRowKind>,
+        contested: bool,
+    }
+
+    fn pick(
+        session: &mut ShortcutSession,
+        candidates: &[String],
+        offset: usize,
+        request: PickRequest<'_>,
+        contested_picks: &mut usize,
+    ) -> String {
+        for at in 0..candidates.len() {
+            let chord = &candidates[(offset + at) % candidates.len()];
+            match session.taken(chord, Some(request.row_id), request.command, request.side) {
+                None => return chord.clone(),
+                Some(taken) if request.contested && taken.claim.is_some() => {
+                    *contested_picks += 1;
+                    return chord.clone();
+                }
+                Some(_) => {}
+            }
+        }
+        panic!("no move target for {}", request.row_id);
+    }
+
+    fn resolve_world(
+        session: &mut ShortcutSession,
+        strategy: Strategy,
+        offset: usize,
+        contested_picks: &mut usize,
+    ) {
+        let candidates = candidates();
+        for _ in 0..400 {
+            let Some(row) = session.rows().into_iter().find(unresolved) else {
+                return;
+            };
+            if let Some(claim) = row
+                .claims
+                .iter()
+                .find(|claim| claim.resting != Some(true) && claim.decided.is_none())
+                .cloned()
+            {
+                let key = matches!(strategy, Strategy::TerminalMove).then(|| {
+                    pick(
+                        session,
+                        &candidates,
+                        offset,
+                        PickRequest {
+                            row_id: &claim.chord,
+                            command: Some(&claim.command),
+                            side: None,
+                            contested: false,
+                        },
+                        contested_picks,
+                    )
+                });
+                let mut choice = decision(DecisionChoice::Terminal, key.as_deref());
+                choice.action = Some(claim.command.clone());
+                session.decide(
+                    &claim.chord,
+                    DecisionKind::Claim,
+                    Some(choice),
+                    false,
+                    Some(ClaimInfo {
+                        command: claim.command,
+                        when: claim.when,
+                    }),
+                );
+                continue;
+            }
+            if row.kind == ManagerRowKind::Import {
+                let key =
+                    matches!(strategy, Strategy::TerminalMove | Strategy::EditorMove).then(|| {
+                        pick(
+                            session,
+                            &candidates,
+                            offset,
+                            PickRequest {
+                                row_id: &row.id,
+                                command: row.imported_command.as_deref(),
+                                side: None,
+                                contested: false,
+                            },
+                            contested_picks,
+                        )
+                    });
+                session.decide(
+                    &row.id,
+                    DecisionKind::Import,
+                    Some(decision(DecisionChoice::Terminal, key.as_deref())),
+                    true,
+                    row.imported_command.map(|command| ClaimInfo {
+                        command,
+                        when: None,
+                    }),
+                );
+                continue;
+            }
+            let choice = match strategy {
+                Strategy::Keep => decision(DecisionChoice::Keep, None),
+                Strategy::EditorMove => {
+                    let key = pick(
+                        session,
+                        &candidates,
+                        offset,
+                        PickRequest {
+                            row_id: &row.id,
+                            command: None,
+                            side: Some(ManagerRowKind::Import),
+                            contested: false,
+                        },
+                        contested_picks,
+                    );
+                    decision(DecisionChoice::Editor, Some(&key))
+                }
+                Strategy::TerminalMove | Strategy::ContestedMove => {
+                    let key = pick(
+                        session,
+                        &candidates,
+                        offset,
+                        PickRequest {
+                            row_id: &row.id,
+                            command: None,
+                            side: Some(ManagerRowKind::Terminal),
+                            contested: matches!(strategy, Strategy::ContestedMove),
+                        },
+                        contested_picks,
+                    );
+                    decision(DecisionChoice::Terminal, Some(&key))
+                }
+                Strategy::Unset => decision(DecisionChoice::Terminal, None),
+            };
+            session.decide(&row.id, DecisionKind::Terminal, Some(choice), false, None);
+        }
+        panic!("shortcut manager did not converge");
+    }
+
+    fn snapshot(paths: &ProfilePaths, owned: &Path) -> Vec<u8> {
+        [
+            fs::read(owned).unwrap_or_default(),
+            fs::read(paths.user.join("keybindings.json")).unwrap_or_default(),
+        ]
+        .concat()
+    }
+
+    #[test]
+    fn adversarial_closed_loop_reopens_clean_and_byte_idempotent() {
+        let (root, environment, paths, imported) = loop_fixture();
+        let provider = detect_provider(root.path(), &environment).unwrap();
+        let owned = provider.config_dir.join("tode/keybinds.ghostty");
+        let mut contested_picks = 0;
+        let candidate_count = candidates().len();
+        let mut runs = vec![
+            (Strategy::Unset, 0),
+            (Strategy::Keep, 0),
+            (Strategy::EditorMove, 0),
+        ];
+        runs.extend(
+            (0..candidate_count)
+                .step_by(3)
+                .map(|offset| (Strategy::TerminalMove, offset)),
+        );
+        runs.extend(
+            (0..candidate_count)
+                .step_by(5)
+                .map(|offset| (Strategy::ContestedMove, offset)),
+        );
+        for (strategy, offset) in runs {
+            let mut session = ShortcutSession::new(provider.clone(), paths.clone()).unwrap();
+            assert!(session.rows().iter().any(unresolved));
+            resolve_world(&mut session, strategy, offset, &mut contested_picks);
+            session.confirm().unwrap();
+            let mut reopened = ShortcutSession::new(provider.clone(), paths.clone()).unwrap();
+            let unresolved_rows: Vec<_> = reopened.rows().into_iter().filter(unresolved).collect();
+            assert!(
+                unresolved_rows.is_empty(),
+                "{strategy:?}@{offset}: {unresolved_rows:#?}\ndecisions={:#?}\nkeybindings={}",
+                crate::shortcuts::load_decisions(&paths),
+                fs::read_to_string(paths.user.join("keybindings.json")).unwrap_or_default(),
+            );
+            let before = snapshot(&paths, &owned);
+            reopened.confirm().unwrap();
+            assert_eq!(snapshot(&paths, &owned), before, "{strategy:?}");
+            undo_shortcuts(&provider, &paths).unwrap();
+            fs::write(paths.user.join("keybindings.json"), &imported).unwrap();
+        }
+        assert!(contested_picks > 0);
+
+        let mut session = ShortcutSession::new(provider, paths.clone()).unwrap();
+        let late_chord = canonical_chord("cmd+alt+shift+z");
+        assert!(!session.rows().iter().any(|row| row.id == late_chord));
+        let mut late: Vec<Binding> = serde_json::from_str(&imported).unwrap();
+        late.push(Binding {
+            key: "cmd+alt+shift+z".into(),
+            command: "my.late.import".into(),
+            when: None,
+        });
+        fs::write(
+            paths.user.join("keybindings.json"),
+            serde_json::to_vec(&late).unwrap(),
+        )
+        .unwrap();
+        let late_extension = paths.extensions.join("late.ext-1.0.0");
+        fs::create_dir(&late_extension).unwrap();
+        fs::write(
+            late_extension.join("package.json"),
+            r#"{"name":"late","displayName":"Late","contributes":{"keybindings":[{"key":"cmd+alt+shift+z","command":"late.thing"}]}}"#,
+        )
+        .unwrap();
+        let late_row = session
+            .rows()
+            .into_iter()
+            .find(|row| row.id == late_chord)
+            .unwrap();
+        assert!(late_row.claims.iter().any(|claim| claim.claimant == "Late"));
     }
 }

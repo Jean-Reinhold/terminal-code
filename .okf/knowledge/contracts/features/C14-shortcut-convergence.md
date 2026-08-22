@@ -5,7 +5,7 @@ contract_id: C14
 description: Preserve wizard conflict state, claimant decisions, safe chord selection, convergence, and byte idempotence.
 tags: [shortcuts, state-machine, convergence, idempotence]
 status: draft
-implementation_status: rust-embedded-manager-partial
+implementation_status: rust-production-parity
 risk: critical
 owners: [shortcuts]
 surfaces: [filesystem, browser, terminal]
@@ -30,4 +30,4 @@ Represent terminal/import/builtin/extension claimants consistently, reject occup
 
 # Coverage Status
 
-Rust tests cover decision bindings, provider holder discovery, shared convergence, manager rows, moved-target occupancy, terminal/import/claim enrichment, twin cleanup, persistence/apply/reopen, cyclic claimant termination, bounded token-scoped HTTP state/taken/decide/confirm/done, live ancestry reload, and production CLI admission branches. A real Chrome smoke routed `ctrl+p`, confirmed, closed, and produced the expected decision, editor binding, and Ghostty unbind. C14 remains draft until the full legacy adversarial corpus is translated.
+Rust tests cover decision bindings, live holder refresh, shared convergence, manager rows, canonical moved-target occupancy, exact staged claim identity/translation, uniform foreign/default/extension removal masking, twin cleanup, persistence/apply/reopen, cyclic claimant termination, bounded token-scoped HTTP state/taken/decide/confirm/done, live ancestry reload, and production CLI admission. The translated adversarial oracle passes unset/keep/editor-move plus all 48 terminal-move and 29 contested-move offsets across 144 candidates, proves fresh reopen has zero unresolved rows, proves second apply byte idempotence, and observes late import/unregistered extension growth in the same session. A real Chrome smoke routed/applied/closed successfully. C14 remains draft only for isolated real-terminal/browser scenario certification.

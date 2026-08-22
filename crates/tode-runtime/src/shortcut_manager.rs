@@ -182,12 +182,14 @@ async fn handle(
             text(StatusCode::OK, "text/html; charset=utf-8", MANAGER_HTML)
         }
         (Method::GET, "/state") => {
-            let session = session.lock().expect("shortcut session lock");
+            let mut session = session.lock().expect("shortcut session lock");
+            let terminal_name = session.provider().name;
+            let rows = session.rows();
             json_response(
                 StatusCode::OK,
                 &json!({
-                    "rows": session.rows(),
-                    "terminalName": session.provider().name,
+                    "rows": rows,
+                    "terminalName": terminal_name,
                     "reloadHint": config.reload_hint,
                     "intro": config.intro,
                     "continues": config.continues,
@@ -198,7 +200,7 @@ async fn handle(
         (Method::POST, "/taken") => match read_json(request).await {
             Ok(sent) => {
                 let raw = sent["chord"].as_str().unwrap_or_default();
-                let session = session.lock().expect("shortcut session lock");
+                let mut session = session.lock().expect("shortcut session lock");
                 let Some(chord) = session.normalize(raw) else {
                     return Ok(json_response(
                         StatusCode::OK,

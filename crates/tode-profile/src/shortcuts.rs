@@ -745,24 +745,35 @@ pub(crate) fn editor_holders(paths: &ProfilePaths) -> BTreeMap<String, Vec<Edito
     let previous = read_bindings(&paths.data.join("keybindings.tode.json"));
     let current = read_bindings(&paths.user.join("keybindings.json"));
     let foreign: Vec<_> = current
-        .into_iter()
+        .iter()
         .filter(|binding| !previous.contains(binding) && !mine.contains(binding))
+        .cloned()
         .collect();
+    let mut removals = current.clone();
+    if let Some(decisions) = decisions.as_ref() {
+        removals.extend(override_bindings(decisions, cfg!(target_os = "macos")));
+        removals.extend(claim_bindings(decisions));
+    }
     let mut holders: BTreeMap<String, Vec<EditorHold>> = BTreeMap::new();
     for (binding, claimant) in foreign
         .iter()
         .map(|binding| (binding, "imported"))
         .chain(mine.iter().map(|binding| (binding, "terminal-code")))
     {
-        record_holder(&mut holders, binding, claimant, None);
+        let chord = canonical_chord(&binding.key);
+        if !removal_masked(&removals, &chord, &binding.command) {
+            record_holder(&mut holders, binding, claimant, None);
+        }
     }
     for (chord, binding) in default_bindings() {
-        if !removal_masked(&foreign, &chord, &binding.command) {
+        if !removal_masked(&removals, &chord, &binding.command) {
             record_holder(&mut holders, &binding, "terminal-code", None);
         }
     }
     for (chord, claim) in extension_bindings(paths) {
-        holders.entry(chord).or_default().push(claim);
+        if !removal_masked(&removals, &chord, &claim.command) {
+            holders.entry(chord).or_default().push(claim);
+        }
     }
     for values in holders.values_mut() {
         let mut commands = BTreeSet::new();
