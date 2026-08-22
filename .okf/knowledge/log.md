@@ -39,4 +39,4 @@
 * **M6 import/theme commands**: Wired production Rust editor discovery/import reports and managed theme installation/fingerprint output with end-to-end profile integration.
 * **M6 uninstall**: Added safe Rust owned-path/font/shim/terminal-config uninstall service and production `--uninstall --yes` integration with unrelated-data protection.
 * **M6/M7 upgrade**: Added verified Rust current/available/upgraded transactions and production `--upgrade --check` manifest/build selection integration.
-* **M6 timing**: Ported typed timing files and exact report formatting, including missing-data, launch/navigation stages, workbench marks, and production `--timing`.
+* **M6 timing**: Ported typed timing files and exact report formatting, generated the Electron top-frame timing bridge from Rust, recorded cumulative launch stages, passed preload/main-script arguments to terminal-browser, and wired both standalone and per-open `--timing`.

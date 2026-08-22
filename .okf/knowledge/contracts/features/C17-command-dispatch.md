@@ -33,4 +33,4 @@ Dispatch version/help/shortcut/import/theme/timing/skill/upgrade/shutdown/uninst
 
 # Coverage Status
 
-Rust tests cover help/version/shutdown, open compatibility options, extensions, import/theme/timing/upgrade/uninstall commands, real new open, and existing-window reuse. C17 remains draft until shortcut and skill dispatch are wired.
+Rust tests cover help/version/shutdown, open compatibility options, extensions, import/theme/standalone and per-open timing/upgrade/uninstall commands, real new open with the browser bridge, and existing-window reuse. C17 remains draft until shortcut and skill dispatch are wired.

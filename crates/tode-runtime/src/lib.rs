@@ -1,5 +1,6 @@
 pub mod artifact;
 pub mod browser;
+pub mod browser_bridge;
 pub mod daemon;
 pub mod injector;
 pub mod process;
@@ -13,6 +14,7 @@ pub use browser::{
     BrowserHomes, BrowserResolveError, BrowserRuntime, RuntimeRoots, RuntimeSource, electron_entry,
     resolve_existing, resolve_runtime, usable, version_at, write_launcher,
 };
+pub use browser_bridge::{BrowserScripts, write_browser_scripts, write_launch_timing};
 pub use daemon::{Daemon, DaemonConfig, DaemonError};
 pub use injector::{FONT_ROUTE, Injector, InjectorConfig, injected_css};
 pub use process::{

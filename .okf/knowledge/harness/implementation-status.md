@@ -21,8 +21,8 @@ sources:
 * Root Cargo workspace pinned to Rust 1.98.0.
 * `tode-core` Rust library with CLI identity, target/goto, Unix IPC, OSC palettes, source-preserving JSONC, complete themes, shortcut transforms/decisions, and release target/manifest/receipt schemas.
 * `tode-profile` Rust crate with XDG/install ownership, managed/seeded settings, atomic writes, managed theme extension/registry/live files, and full non-UI editor import.
-* `tode-runtime` Rust downloaded/existing terminal-browser resolution, verified artifacts/launcher, and persistent managed code-server/injector daemon command.
-* Production Rust `tode` binary with help/version, compatibility/open parsing, extensions, import/theme/timing/upgrade/uninstall, existing-window reuse, profile/CSS, daemon, browser launch, and shutdown.
+* `tode-runtime` Rust downloaded/existing terminal-browser resolution, verified artifacts/launcher, generated Electron timing bridge, and persistent managed code-server/injector daemon command.
+* Production Rust `tode` binary with help/version, compatibility/open parsing, extensions, import/theme/timing/upgrade/uninstall, existing-window reuse, profile/CSS, daemon, timed browser-bridge launch, and shutdown.
 * `tode-harness` binary/library with `catalog check`, `schema`, `run`, and `replay` commands.
 * YAML-backed OKF catalog with 22 contract concepts, draft-aware executable coverage, reciprocal scenario links, risk/owner/surface/platform/source validation, and all 119 legacy test declarations mapped.
 * Strict JSONC scenario v1 compiler and generated JSON Schema.
@@ -41,11 +41,11 @@ sources:
 
 # Verified Behavior
 
-* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 107 contract-mapped Rust tests.
+* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 109 contract-mapped Rust tests.
 * C01 Rust help/version scenarios matched exact snapshots captured from the legacy CLI.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* One hundred twenty-one Rust workspace tests passed:
+* One hundred twenty-three Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
   - CLI help completeness and version receipt/fallback;
@@ -82,7 +82,7 @@ sources:
   - five server state/PID/readiness/dual-listener/stale-cleanup tests;
   - two exact code-server command/environment and managed spawn/readiness/shutdown integration tests;
   - two daemon asset-extraction and composed code-server/injector/state/shutdown tests;
-  - four terminal-browser layout/precedence/clone/launcher tests;
+  - six terminal-browser layout/precedence/clone/launcher and generated timing-bridge tests;
   - one release lookup/download/strip-one/unpack/launcher composition test;
   - two persistent daemon argument/readiness/SIGTERM/child/state-cleanup tests;
   - seven workbench URL, compatibility/open parser, production new-open, IPC-reuse, daemon/browser, and shutdown tests;
@@ -114,4 +114,3 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Next Slice
 Continue M6 with shortcut and skill dispatch plus full upgraded-output integration. New-launch goto/diff/review still awaits the Rust bridge.
-Continue M6 with shortcut/timing/skill dispatch and full upgraded-output integration. New-launch goto/diff/review still awaits the Rust bridge.

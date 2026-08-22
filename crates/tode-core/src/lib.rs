@@ -7,6 +7,7 @@ pub mod release;
 pub mod shortcuts;
 pub mod target;
 pub mod theme;
+pub mod timing;
 
 pub use cli::{HELP, installed_version};
 pub use color::{
@@ -36,3 +37,4 @@ pub use theme::{
     GeneratedTheme, SemanticColors, Surfaces, generate_theme, palette_fingerprint, semantic_colors,
     surfaces, theme_fingerprint,
 };
+pub use timing::{LaunchTiming, PageTiming, format_timing};

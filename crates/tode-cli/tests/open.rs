@@ -47,6 +47,7 @@ fn opens_folder_through_rust_daemon_and_browser_then_shuts_down() {
         &browser_args,
     )
     .current_dir(&workspace)
+    .arg("--timing")
     .arg(".")
     .output()
     .unwrap();
@@ -66,6 +67,32 @@ fn opens_folder_through_rust_daemon_and_browser_then_shuts_down() {
     assert!(arguments.lines().any(|line| line == "open"));
     assert!(arguments.lines().any(|line| line == "--app-mode"));
     assert!(arguments.contains("folder=%2F"));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("runtime"));
+    assert!(stderr.contains("profile"));
+    assert!(stderr.contains("code-server"));
+    let preload = root.path().join("data/tode/browser-preload.js");
+    let main_script = root.path().join("data/tode/browser-main.js");
+    assert!(preload.is_file());
+    assert!(main_script.is_file());
+    assert!(
+        arguments
+            .lines()
+            .any(|line| line == format!("--preload={}", preload.display()))
+    );
+    assert!(
+        arguments
+            .lines()
+            .any(|line| line == format!("--main-script={}", main_script.display()))
+    );
+    let launch: serde_json::Value = serde_json::from_slice(
+        &fs::read(root.path().join("data/tode/inject.css.launch.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(launch["spawnedAt"].as_i64().unwrap() > 0);
+    assert_eq!(launch["stages"][0][0], "runtime");
+    assert_eq!(launch["stages"][1][0], "profile");
+    assert_eq!(launch["stages"][2][0], "code-server");
 
     let shutdown = base_command(
         &target,

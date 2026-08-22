@@ -22,7 +22,7 @@ use tode_profile::{
 };
 use tode_runtime::{
     BrowserHomes, RuntimeRoots, ServerState, UpgradeOutcome, apply_build, current_server,
-    injected_css, resolve_runtime, stop_server,
+    injected_css, resolve_runtime, stop_server, write_browser_scripts, write_launch_timing,
 };
 
 const TERMINAL_BROWSER_VERSION: &str = "v0.5.8";
@@ -40,6 +40,7 @@ struct OpenOptions {
     split: Option<String>,
     size: Option<String>,
     review: bool,
+    timing: bool,
     warnings: Vec<String>,
     install_extensions: Vec<String>,
     uninstall_extensions: Vec<String>,
@@ -191,20 +192,8 @@ async fn open(
         return Err("multiple new-window targets require the Rust bridge for now".into());
     }
     let target = resolve_target(options.paths.first().map(String::as_str), &cwd);
-    let palette = with_fallbacks(None);
-    install_settings(paths).map_err(|error| format!("install settings: {error}"))?;
-    install_theme(paths, &palette).map_err(|error| format!("install theme: {error}"))?;
-    let css = injected_css(&tode_core::hex(palette.background), FONT_FAMILY);
-    let css_file = paths.data.join("inject.css");
-    write_if_changed(&css_file, css.as_bytes()).map_err(|error| format!("install CSS: {error}"))?;
-
-    let state_file = paths.state.join("server.json");
-    let state = match current_server(&state_file, Duration::from_millis(400)).await {
-        Some(state) => state,
-        None => start_daemon(paths, environment, &css_file, &state_file)?,
-    };
-    let url = workbench_url(&tode_runtime::origin(&state), &target)
-        .map_err(|error| format!("build workbench URL: {error}"))?;
+    let started = std::time::Instant::now();
+    let mut stages = Vec::new();
     let client = reqwest::Client::new();
     let roots = runtime_roots(paths);
     let override_binary = environment
@@ -225,7 +214,59 @@ async fn open(
     )
     .await
     .map_err(|error| error.to_string())?;
-    let mut browser_arguments = vec!["open".to_owned(), url, "--app-mode".to_owned()];
+    stages.push((
+        "runtime".to_owned(),
+        i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX),
+    ));
+
+    let palette = with_fallbacks(None);
+    install_settings(paths).map_err(|error| format!("install settings: {error}"))?;
+    install_theme(paths, &palette).map_err(|error| format!("install theme: {error}"))?;
+    let css = injected_css(&tode_core::hex(palette.background), FONT_FAMILY);
+    let css_file = paths.data.join("inject.css");
+    write_if_changed(&css_file, css.as_bytes()).map_err(|error| format!("install CSS: {error}"))?;
+    stages.push((
+        "profile".to_owned(),
+        i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX),
+    ));
+
+    let state_file = paths.state.join("server.json");
+    let state = match current_server(&state_file, Duration::from_millis(400)).await {
+        Some(state) => state,
+        None => start_daemon(paths, environment, &css_file, &state_file)?,
+    };
+    stages.push((
+        "code-server".to_owned(),
+        i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX),
+    ));
+    let url = workbench_url(&tode_runtime::origin(&state), &target)
+        .map_err(|error| format!("build workbench URL: {error}"))?;
+    let scripts = write_browser_scripts(&paths.data, &css_file)
+        .map_err(|error| format!("install browser bridge: {error}"))?;
+    let spawned_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or(Duration::ZERO)
+        .as_millis() as i64;
+    write_launch_timing(
+        &css_file,
+        &LaunchTiming {
+            spawned_at,
+            stages: stages.clone(),
+        },
+    )
+    .map_err(|error| format!("record launch timing: {error}"))?;
+    if options.timing {
+        for (label, milliseconds) in &stages {
+            eprintln!("  {label:<12} {milliseconds}ms");
+        }
+    }
+    let mut browser_arguments = vec![
+        "open".to_owned(),
+        url,
+        "--app-mode".to_owned(),
+        format!("--preload={}", scripts.preload.display()),
+        format!("--main-script={}", scripts.main_script.display()),
+    ];
     if let Some(split) = options.split {
         browser_arguments.extend(["--split".into(), split]);
     }
@@ -624,6 +665,7 @@ fn parse_command(arguments: Vec<String>) -> Result<CliCommand, String> {
             "-r" | "--reuse-window" => options.reuse = true,
             "-w" | "--wait" => options.wait = true,
             "--review" => options.review = true,
+            "--timing" => options.timing = true,
             "--verbose"
             | "--disable-gpu"
             | "--disable-telemetry"
@@ -849,6 +891,7 @@ mod tests {
             "right".into(),
             "--size".into(),
             "0.4".into(),
+            "--timing".into(),
             "folder".into(),
         ])
         .unwrap();
@@ -859,6 +902,7 @@ mod tests {
                 new_window: true,
                 split: Some("right".into()),
                 size: Some("0.4".into()),
+                timing: true,
                 ..OpenOptions::default()
             })
         );
