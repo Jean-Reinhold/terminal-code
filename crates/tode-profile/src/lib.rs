@@ -16,6 +16,7 @@ use std::fs;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use serde_json::{Value, json};
 use tode_core::{
@@ -24,7 +25,48 @@ use tode_core::{
 
 pub const FONT_FAMILY: &str = "JetBrains Mono";
 pub const FONT_FALLBACKS: &str = "Menlo, \"DejaVu Sans Mono\", \"Liberation Mono\", monospace";
+pub const FONT_FILE: &str = "JetBrainsMono-Regular.ttf";
 pub const THEME_EXTENSION_ID: &str = "tode.tode-theme";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FontStatus {
+    Installed,
+    Present,
+}
+
+pub fn font_path(home: &Path, environment: &BTreeMap<OsString, OsString>) -> PathBuf {
+    if cfg!(target_os = "macos") {
+        return home.join("Library/Fonts").join(FONT_FILE);
+    }
+    let data = environment
+        .get(OsStr::new("XDG_DATA_HOME"))
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .unwrap_or_else(|| home.join(".local/share"));
+    data.join("fonts").join(FONT_FILE)
+}
+
+pub fn ensure_font(
+    home: &Path,
+    environment: &BTreeMap<OsString, OsString>,
+) -> std::io::Result<FontStatus> {
+    let target = font_path(home, environment);
+    if target.is_file() {
+        return Ok(FontStatus::Present);
+    }
+    let directory = target
+        .parent()
+        .ok_or_else(|| std::io::Error::other("font target has no parent"))?;
+    fs::create_dir_all(directory)?;
+    fs::write(
+        &target,
+        include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf"),
+    )?;
+    if !cfg!(target_os = "macos") {
+        let _ = Command::new("fc-cache").arg("-f").arg(directory).status();
+    }
+    Ok(FontStatus::Installed)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ThemeInstall {
@@ -419,5 +461,26 @@ mod tests {
         assert!(!second.changed);
         assert_eq!(first.fingerprint, second.fingerprint);
         assert_eq!(first.directory, second.directory);
+    }
+    #[test]
+    fn installs_bundled_font_once_at_platform_user_path() {
+        let root = TempDir::new().unwrap();
+        let environment = BTreeMap::from([(
+            OsString::from("XDG_DATA_HOME"),
+            root.path().join("data").into_os_string(),
+        )]);
+        assert_eq!(
+            ensure_font(root.path(), &environment).unwrap(),
+            FontStatus::Installed
+        );
+        let path = font_path(root.path(), &environment);
+        assert_eq!(
+            fs::read(&path).unwrap(),
+            include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf")
+        );
+        assert_eq!(
+            ensure_font(root.path(), &environment).unwrap(),
+            FontStatus::Present
+        );
     }
 }

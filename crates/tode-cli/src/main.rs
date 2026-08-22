@@ -25,8 +25,9 @@ use tode_profile::shortcuts::{
     provider_readiness, reload_provider, scan_shortcuts, undo_shortcuts,
 };
 use tode_profile::{
-    FONT_FAMILY, ProfilePaths, UninstallConfig, describe, find_editors, install_settings,
-    install_theme, install_theme_value, run_import, summarise, uninstall, write_if_changed,
+    FONT_FAMILY, ProfilePaths, UninstallConfig, describe, ensure_font, find_editors,
+    install_settings, install_theme, install_theme_value, run_import, summarise, uninstall,
+    write_if_changed,
 };
 use tode_runtime::{
     BrowserHomes, BrowserRuntime, ImportManager, RuntimeRoots, ServerState, ShortcutManager,
@@ -283,6 +284,9 @@ async fn open(
     let palette = with_fallbacks(None);
     install_settings(paths).map_err(|error| format!("install settings: {error}"))?;
     install_theme(paths, &palette).map_err(|error| format!("install theme: {error}"))?;
+    if let Some(home) = environment.get(&OsString::from("HOME")).map(PathBuf::from) {
+        ensure_font(&home, environment).map_err(|error| format!("install font: {error}"))?;
+    }
     install_bridge(paths).map_err(|error| format!("install window bridge: {error}"))?;
     if let Some(request) = startup_request.as_ref() {
         request_startup_open(paths, request, tode_runtime::now_unix_ms())
