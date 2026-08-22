@@ -304,8 +304,14 @@ async fn open(
     ));
     let url = workbench_url(&tode_runtime::origin(&state), &target)
         .map_err(|error| format!("build workbench URL: {error}"))?;
-    let scripts = write_browser_scripts(&paths.data, &css_file)
-        .map_err(|error| format!("install browser bridge: {error}"))?;
+    let theme_helper = theme_bridge_path(environment);
+    let scripts = write_browser_scripts(
+        &paths.data,
+        &css_file,
+        &theme_helper,
+        &paths.state.join("ipc"),
+    )
+    .map_err(|error| format!("install browser bridge: {error}"))?;
     let spawned_at = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or(Duration::ZERO)
@@ -995,6 +1001,17 @@ fn default_daemon_path() -> PathBuf {
         .ok()
         .and_then(|path| path.parent().map(|parent| parent.join("tode-daemon")))
         .unwrap_or_else(|| PathBuf::from("tode-daemon"))
+}
+fn theme_bridge_path(environment: &BTreeMap<OsString, OsString>) -> PathBuf {
+    environment
+        .get(&OsString::from("TODE_THEME_BRIDGE"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            env::current_exe()
+                .ok()
+                .and_then(|path| path.parent().map(|parent| parent.join("tode-theme-bridge")))
+                .unwrap_or_else(|| PathBuf::from("tode-theme-bridge"))
+        })
 }
 
 async fn resolve_browser_runtime(

@@ -29,4 +29,4 @@ Child frames stay out of the timing story; the main workbench records known mark
 
 # Coverage Status
 
-Rust tests cover missing timing data, page age, launch stages, navigation, known workbench marks, fixed-width millisecond rows, nonempty bars, top-frame mark capture, IPC persistence, launch-record writes, terminal-browser preload/main-script arguments, and per-open stage output through the production Rust command.
+Rust tests cover missing timing data, page age, launch stages, navigation, known workbench marks, fixed-width millisecond rows, nonempty bars, top-frame mark capture, IPC persistence, launch-record writes, terminal-browser preload/main-script arguments, per-open stage output, and timing/theme coexistence in the generated host adapter.
