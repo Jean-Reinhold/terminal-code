@@ -35,4 +35,4 @@ Dispatch version/help/shortcut/import/theme/timing/skill/upgrade/shutdown/uninst
 
 # Coverage Status
 
-Rust tests cover help/version/shutdown, shortcut setup/undo/admission, open compatibility options, extensions, import/theme/skill/standalone and per-open timing/upgrade/uninstall commands, real new open with the browser bridge, and existing-window reuse. Every named first-position command now dispatches through the production Rust binary.
+Rust tests cover help/version/shutdown, shortcut setup/undo/admission, ignored/open compatibility options, multiple-target and no-window add/reuse fallbacks, extensions, import/palette and JSONC-file theme/skill/standalone and per-open timing/upgrade/uninstall commands, real new open with the browser bridge, and existing-window reuse. Every named first-position command dispatches through the production Rust binary.

@@ -22,7 +22,7 @@ sources:
 * `tode-core` Rust library with CLI identity, target/goto, Unix IPC, OSC palettes, source-preserving JSONC, complete themes, shortcut transforms/decisions, and release target/manifest/receipt schemas.
 * `tode-profile` Rust crate with XDG/install ownership, managed/seeded settings, atomic writes, managed theme and dependency-free window bridge extensions, full non-UI editor import, Ghostty/Kitty shortcut provider orchestration, and shortcut decision manager state.
 * `tode-runtime` Rust downloaded/existing terminal-browser resolution, verified artifacts/launcher, generated Electron timing/live-theme bridge with Rust conversion helper, token-scoped embedded shortcut manager, and persistent managed code-server/injector daemon command.
-* Production Rust `tode` binary with help/version, compatibility/open parsing, extensions, shortcut setup/undo/TTY manager, import/theme/timing/skill/upgrade/uninstall, existing-window reuse, new-window goto/review/diff startup, profile/CSS/keybindings, daemon, timed browser-bridge launch, and shutdown.
+* Production Rust `tode` binary with help/version, full compatibility/open parsing, multiple-target startup, no-window add/reuse fallback, extensions, shortcut setup/undo/TTY manager, import/palette and JSONC-file theme/timing/skill/upgrade/uninstall, existing-window reuse, new-window goto/review/diff startup, profile/CSS/keybindings, daemon, timed browser-bridge launch, and shutdown.
 * `tode-harness` binary/library with `catalog check`, `schema`, `run`, and `replay` commands.
 * YAML-backed OKF catalog with 22 contract concepts, draft-aware executable coverage, reciprocal scenario links, risk/owner/surface/platform/source validation, and all 119 legacy test declarations mapped.
 * Strict JSONC scenario v1 compiler and generated JSON Schema.
@@ -121,4 +121,4 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Next Slice
 
-Continue M4/C15 automated real terminal theme-change certification, then executable scenarios for remaining contracts.
+Continue automated real terminal theme-change certification, then executable scenarios and direct dual-target differential execution.

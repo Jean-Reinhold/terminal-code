@@ -50,4 +50,4 @@ sources:
 * [Missing-file scenario](../../../../harness/scenarios/cli/target-missing.scenario.jsonc)
 * [Goto scenario](../../../../harness/scenarios/cli/goto.scenario.jsonc)
 
-The Rust `tode-core` implementation is executed through the Rust `tode-contract-probe` binary. All four scenarios match exact snapshots captured from the legacy exports, and the production Rust CLI test covers folder launch plus new-window goto line/column, SCM review, and diff startup markers; no JavaScript test wrapper remains.
+The Rust `tode-core` implementation is executed through the Rust `tode-contract-probe` binary. All four scenarios match exact snapshots captured from legacy exports. Production Rust CLI integration covers folder launch, new-window goto line/column, SCM review, diff, multiple-file startup replay, and no-window reuse fallback; no JavaScript test wrapper remains.

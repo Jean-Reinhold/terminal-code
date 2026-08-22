@@ -67,6 +67,52 @@ fn imports_discovered_editor_and_installs_theme() {
             .starts_with("tode.tode-theme-")
     }));
     assert!(root.path().join("data/tode/live-theme.json").is_file());
+    let custom = root.path().join("custom-theme.json");
+    fs::write(
+        &custom,
+        r##"{
+          // JSONC is accepted like VS Code theme files
+          "name": "Custom",
+          "type": "light",
+          "colors": {"editor.background": "#abcdef"},
+          "tokenColors": [],
+        }"##,
+    )
+    .unwrap();
+    let custom_output = base(binary, root.path(), &home)
+        .args(["--theme", custom.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(
+        custom_output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&custom_output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&custom_output.stdout),
+        format!(
+            "theme set from {} — open windows follow without a reload\n",
+            custom.display()
+        )
+    );
+    let live: Value =
+        serde_json::from_slice(&fs::read(root.path().join("data/tode/live-theme.json")).unwrap())
+            .unwrap();
+    assert_eq!(live["colors"]["editor.background"], "#abcdef");
+    let invalid = root.path().join("invalid-theme.json");
+    fs::write(&invalid, "{}").unwrap();
+    let invalid_output = base(binary, root.path(), &home)
+        .args(["--theme", invalid.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert_eq!(invalid_output.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8_lossy(&invalid_output.stderr),
+        format!(
+            "tode: {} is not a vscode theme (expected a json document with colors or tokenColors)\n",
+            invalid.display()
+        )
+    );
 }
 
 fn base(binary: &str, root: &std::path::Path, home: &std::path::Path) -> Command {

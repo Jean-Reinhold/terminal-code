@@ -15,8 +15,8 @@ use std::time::Duration;
 use tode_core::{
     HELP, LaunchTiming, OpenFile, OpenRequest, PageTiming, ReleaseManifest, build_for,
     current_target_triple, format_timing, installed_receipt, installed_version,
-    latest_manifest_path, parse_goto, resolve_target, send_to_extension, with_fallbacks,
-    workbench_url,
+    latest_manifest_path, parse_goto, parse_jsonc, resolve_target, send_to_extension,
+    theme_fingerprint, with_fallbacks, workbench_url,
 };
 use tode_profile::bridge::{install_bridge, request_startup_open};
 use tode_profile::shortcut_manager::ShortcutSession;
@@ -26,7 +26,7 @@ use tode_profile::shortcuts::{
 };
 use tode_profile::{
     FONT_FAMILY, ProfilePaths, UninstallConfig, find_editors, install_settings, install_theme,
-    run_import, uninstall, write_if_changed,
+    install_theme_value, run_import, uninstall, write_if_changed,
 };
 use tode_runtime::{
     BrowserHomes, BrowserRuntime, RuntimeRoots, ServerState, ShortcutManager,
@@ -219,12 +219,6 @@ async fn open(
             return Ok(0);
         }
     }
-    if options.add || options.reuse {
-        return Err("add/reuse requires an existing Rust bridge window for now".into());
-    }
-    if options.paths.len() > 1 && !options.goto && !options.diff {
-        return Err("multiple new-window targets require the Rust bridge for now".into());
-    }
     let target = if options.goto {
         files
             .first()
@@ -239,6 +233,10 @@ async fn open(
         .file
         .as_ref()
         .map(|path| path.to_string_lossy().into_owned());
+    let target_folder = target
+        .folder
+        .as_ref()
+        .map(|path| path.to_string_lossy().into_owned());
     let startup_files: Vec<_> = files
         .iter()
         .filter(|file| {
@@ -249,11 +247,24 @@ async fn open(
         })
         .cloned()
         .collect();
-    let startup_request =
-        (!startup_files.is_empty() || diff.is_some() || options.review).then(|| OpenRequest {
+    let startup_folders: Vec<_> = folders
+        .iter()
+        .filter(|folder| {
+            target_folder
+                .as_deref()
+                .is_none_or(|target| *folder != target)
+        })
+        .cloned()
+        .collect();
+    let add_folders = !startup_folders.is_empty();
+    let startup_request = (!startup_files.is_empty()
+        || !startup_folders.is_empty()
+        || diff.is_some()
+        || options.review)
+        .then(|| OpenRequest {
             files: startup_files,
-            folders: Vec::new(),
-            add: false,
+            folders: startup_folders,
+            add: add_folders,
             wait: Some(false),
             diff: diff.clone(),
             view: options.review.then(|| "scm".into()),
@@ -513,9 +524,24 @@ fn import_editor(
 
 fn set_theme(file: Option<&str>, paths: &ProfilePaths) -> Result<u8, String> {
     if let Some(file) = file {
-        return Err(format!(
-            "theme file import is not yet available in Rust: {file}"
-        ));
+        let source = fs::read_to_string(file).map_err(|_| format!("could not read {file}"))?;
+        let theme: serde_json::Value = parse_jsonc(&source).ok_or_else(|| {
+            format!(
+                "{file} is not a vscode theme (expected a json document with colors or tokenColors)"
+            )
+        })?;
+        if !theme.is_object()
+            || (theme.get("colors").is_none() && theme.get("tokenColors").is_none())
+        {
+            return Err(format!(
+                "{file} is not a vscode theme (expected a json document with colors or tokenColors)"
+            ));
+        }
+        let fingerprint = theme_fingerprint(&theme).map_err(|error| error.to_string())?;
+        install_theme_value(paths, &theme, &fingerprint).map_err(|error| error.to_string())?;
+        install_bridge(paths).map_err(|error| error.to_string())?;
+        println!("theme set from {file} — open windows follow without a reload");
+        return Ok(0);
     }
     let installed =
         install_theme(paths, &with_fallbacks(None)).map_err(|error| error.to_string())?;

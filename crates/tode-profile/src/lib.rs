@@ -135,13 +135,25 @@ pub fn install_theme_document(
     theme: &GeneratedTheme,
     fingerprint: &str,
 ) -> std::io::Result<ThemeInstall> {
+    install_theme_value(
+        paths,
+        &serde_json::to_value(theme).expect("generated theme serializes"),
+        fingerprint,
+    )
+}
+
+pub fn install_theme_value(
+    paths: &ProfilePaths,
+    theme: &Value,
+    fingerprint: &str,
+) -> std::io::Result<ThemeInstall> {
     let folder = format!("{THEME_EXTENSION_ID}-{fingerprint}");
     let directory = paths.extensions.join(&folder);
     let theme_file = directory.join("themes/tode-terminal.json");
     let changed = !theme_file.is_file();
     if changed {
         fs::create_dir_all(theme_file.parent().expect("theme path has parent"))?;
-        let ui_theme = if theme.theme_type == "light" {
+        let ui_theme = if theme.get("type").and_then(Value::as_str) == Some("light") {
             "vs"
         } else {
             "vs-dark"
@@ -176,7 +188,7 @@ pub fn install_theme_document(
     }
     let live = format!(
         "{}\n",
-        serde_json::to_string(theme).expect("generated theme serializes")
+        serde_json::to_string(theme).expect("theme document serializes")
     );
     write_if_changed(&paths.data.join("live-theme.json"), live.as_bytes())?;
     Ok(ThemeInstall {

@@ -156,7 +156,7 @@ fn opens_folder_through_rust_daemon_and_browser_then_shuts_down() {
         String::from_utf8_lossy(&diff.stderr)
     );
     let marker: serde_json::Value =
-        serde_json::from_slice(&fs::read(marker_file).unwrap()).unwrap();
+        serde_json::from_slice(&fs::read(&marker_file).unwrap()).unwrap();
     assert_eq!(
         marker["diff"][0],
         left.canonicalize().unwrap().to_string_lossy().as_ref()
@@ -164,6 +164,48 @@ fn opens_folder_through_rust_daemon_and_browser_then_shuts_down() {
     assert_eq!(
         marker["diff"][1],
         right.canonicalize().unwrap().to_string_lossy().as_ref()
+    );
+
+    let multiple = base_command(
+        &target,
+        root.path(),
+        &install,
+        &daemon,
+        &code_server,
+        &browser_args,
+    )
+    .current_dir(&workspace)
+    .args(["--new-window", "source.rs", "left.rs"])
+    .output()
+    .unwrap();
+    assert!(
+        multiple.status.success(),
+        "{}",
+        String::from_utf8_lossy(&multiple.stderr)
+    );
+    let marker: serde_json::Value =
+        serde_json::from_slice(&fs::read(&marker_file).unwrap()).unwrap();
+    assert_eq!(
+        marker["files"][0]["path"],
+        left.canonicalize().unwrap().to_string_lossy().as_ref()
+    );
+
+    let reuse_without_window = base_command(
+        &target,
+        root.path(),
+        &install,
+        &daemon,
+        &code_server,
+        &browser_args,
+    )
+    .current_dir(&workspace)
+    .args(["--reuse-window", "."])
+    .output()
+    .unwrap();
+    assert!(
+        reuse_without_window.status.success(),
+        "{}",
+        String::from_utf8_lossy(&reuse_without_window.stderr)
     );
 
     let shutdown = base_command(
