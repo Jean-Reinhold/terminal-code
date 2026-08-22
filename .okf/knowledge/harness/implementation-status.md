@@ -20,7 +20,7 @@ sources:
 
 * Root Cargo workspace pinned to Rust 1.98.0.
 * `tode-core` Rust library with CLI identity, target/goto, Unix IPC, OSC palettes, source-preserving JSONC, complete themes, shortcut transforms/decisions, and release target/manifest/receipt schemas.
-* `tode-profile` Rust crate with XDG/install ownership, managed/seeded settings, atomic writes, managed theme extension/registry/live files, and full non-UI editor import.
+* `tode-profile` Rust crate with XDG/install ownership, managed/seeded settings, atomic writes, managed theme extension/registry/live files, full non-UI editor import, and Ghostty/Kitty shortcut provider orchestration.
 * `tode-runtime` Rust downloaded/existing terminal-browser resolution, verified artifacts/launcher, generated Electron timing bridge, and persistent managed code-server/injector daemon command.
 * Production Rust `tode` binary with help/version, compatibility/open parsing, extensions, import/theme/timing/skill/upgrade/uninstall, existing-window reuse, profile/CSS, daemon, timed browser-bridge launch, and shutdown.
 * `tode-harness` binary/library with `catalog check`, `schema`, `run`, and `replay` commands.
@@ -41,11 +41,11 @@ sources:
 
 # Verified Behavior
 
-* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 110 contract-mapped Rust tests.
+* `tode-harness catalog check`: 22 contracts, 10 scenarios, 119 mapped legacy tests, and 114 contract-mapped Rust tests.
 * C01 Rust help/version scenarios matched exact snapshots captured from the legacy CLI.
 * All four C02 Rust scenarios matched exact snapshots captured from the legacy exports.
 * A sealed help run replayed successfully without executing Node.
-* One hundred twenty-four Rust workspace tests passed:
+* One hundred twenty-eight Rust workspace tests passed:
   - existing/missing file/folder target resolution;
   - goto parsing and existing numeric-suffix preservation;
   - CLI help completeness and version receipt/fallback;
@@ -74,6 +74,7 @@ sources:
   - six full-theme dark/light/surface/ANSI/WCAG/fingerprint/completeness tests;
   - eight chord/Ghostty/Kitty conversion, config, include, emit, and shared-rebind tests;
   - four persisted shortcut claim/import/quit/fallback binding tests;
+  - four provider detection/effective-scan/shared-convergence/atomic-undo/keybinding-reconciliation tests;
   - five profile path/precedence/idempotence/atomic-install tests;
   - six import discovery/progress/settings/keybindings/snippets/tasks/extensions safety/report tests;
   - two managed theme extension/registry/live-file cleanup/idempotence tests;
@@ -106,7 +107,7 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 
 # Not Implemented Yet
 
-* Remaining shortcut command, full upgraded-output transaction integration, and direct dual-target differential execution.
+* Remaining embedded shortcut manager/CLI dispatch, full upgraded-output transaction integration, and direct dual-target differential execution.
 * Executable scenarios for C03-C04 and C06-C22; their concepts and legacy test mappings are complete.
 * PTY/OSC, browser, terminal hardware, release/R2, and install scenario adapters.
 * Hard S2/S3 isolation, total resource budgets, fault injection, and crash resumption.
@@ -114,4 +115,4 @@ Execution policy v1 rejects declared retries rather than ignoring them. Classifi
 * JUnit/SARIF/static HTML reports, remote immutable storage, signatures, CI tiers, or release certificates.
 
 # Next Slice
-Continue M6 with shortcut dispatch plus full upgraded-output integration. New-launch goto/diff/review still awaits the Rust bridge.
+Continue M5/M6 with the embedded shortcut manager and CLI dispatch, then full upgraded-output integration. New-launch goto/diff/review still awaits the Rust bridge.

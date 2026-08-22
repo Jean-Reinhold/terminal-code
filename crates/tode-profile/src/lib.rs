@@ -1,4 +1,5 @@
 pub mod import;
+pub mod shortcuts;
 pub mod uninstall;
 
 pub use import::{

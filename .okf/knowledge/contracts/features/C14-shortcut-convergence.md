@@ -5,19 +5,20 @@ contract_id: C14
 description: Preserve wizard conflict state, claimant decisions, safe chord selection, convergence, and byte idempotence.
 tags: [shortcuts, state-machine, convergence, idempotence]
 status: draft
-implementation_status: rust-decision-bindings-partial
+implementation_status: rust-convergence-service-partial
 risk: critical
 owners: [shortcuts]
 surfaces: [filesystem, browser, terminal]
-source_paths: [src/shortcuts/wizard.ts, src/shortcuts/holds.ts, src/shortcuts/imported.ts, crates/tode-core/src/shortcuts.rs, test/shortcuts.test.js, test/shortcuts-loop.test.js]
+source_paths: [src/shortcuts/wizard.ts, src/shortcuts/holds.ts, src/shortcuts/imported.ts, crates/tode-core/src/shortcuts.rs, crates/tode-profile/src/shortcuts.rs, test/shortcuts.test.js, test/shortcuts-loop.test.js]
 scenario_ids: []
 legacy_test_paths: [test/shortcuts.test.js, test/shortcuts-loop.test.js]
-rust_test_paths: [crates/tode-core/src/shortcuts.rs]
+rust_test_paths: [crates/tode-core/src/shortcuts.rs, crates/tode-profile/src/shortcuts.rs]
 platforms: [macos, linux]
 sources:
   - { id: wizard, resource: ../../../../src/shortcuts/wizard.ts, title: Shortcut manager state machine }
   - { id: loop, resource: ../../../../test/shortcuts-loop.test.js, title: Adversarial closed-loop test }
   - { id: rust, resource: ../../../../crates/tode-core/src/shortcuts.rs, title: Rust persisted decision and binding behavior }
+  - { id: rust-service, resource: ../../../../crates/tode-profile/src/shortcuts.rs, title: Rust holder discovery, shared convergence, decisions, and keybinding reconciliation }
 ---
 
 # Contract
@@ -26,4 +27,4 @@ Represent terminal/import/builtin/extension claimants consistently, reject occup
 
 # Coverage Status
 
-Rust tests now cover persisted claimant removals/moves, imported editor overrides, platform quit/hint guards, and fallback filtering in addition to C13 transforms. C14 remains draft: H3 must still port live holder discovery, `managerRows`, `chordTaken`, twin/mirror decision staging, provider apply/undo, the adversarial closed loop, and equal Kitty convergence.
+Rust tests cover persisted claimant removals/moves, imported editor overrides, platform quit/hint guards, fallback filtering, live provider holder discovery, Kitty shared auto-apply, foreign keybinding preservation, byte idempotence, and undo. C14 remains draft until `managerRows`, `chordTaken`, twin/mirror decision staging, embedded manager admission, and the adversarial closed loop are ported.
